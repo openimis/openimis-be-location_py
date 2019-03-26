@@ -33,7 +33,7 @@ class HealthFacility(models.Model):
     # plserviceid = models.ForeignKey('Tblplservices', models.DO_NOTHING, db_column='PLServiceID', blank=True, null=True)
     # plitemid = models.ForeignKey('Tblplitems', models.DO_NOTHING, db_column='PLItemID', blank=True, null=True)
     offline = models.BooleanField(db_column='OffLine')
-    row_id = models.TextField(db_column='RowID', blank=True, null=True)
+    row_id = models.BinaryField(db_column='RowID', blank=True, null=True)
     audit_user_id = models.IntegerField(db_column='AuditUserID')
 
     class Meta:
