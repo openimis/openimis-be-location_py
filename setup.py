@@ -19,7 +19,7 @@ setup(
     author='Xavier Gillmann',
     author_email='xgillmann@bluesquarehub.com',
     install_requires=[
-        'django>=2.1,<3',
+        'django',
         'django-db-signals',
         'djangorestframework',
     ],   
