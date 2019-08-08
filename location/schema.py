@@ -1,22 +1,20 @@
-import re
-from django.db.models import Q
 import graphene
 from graphene_django import DjangoObjectType
 from .models import HealthFacility, Location
 from .services import HealthFacilityFullPathRequest, HealthFacilityFullPathService
 
 
-class HealthFacilityGraphQLType(DjangoObjectType):
+class HealthFacilityGQLType(DjangoObjectType):
     class Meta:
         model = HealthFacility
 
 
-class LocationGraphQLType(DjangoObjectType):
+class LocationGQLType(DjangoObjectType):
     class Meta:
         model = Location
 
 
-class HealthFacilityFullPathGraphQLType(graphene.ObjectType):
+class HealthFacilityFullPathGQLType(graphene.ObjectType):
     hf_id = graphene.Int()
     hf_code = graphene.String()
     hf_name = graphene.String()
@@ -31,8 +29,8 @@ class HealthFacilityFullPathGraphQLType(graphene.ObjectType):
 
 class Query(graphene.ObjectType):
     health_facility_full_path = graphene.Field(
-        HealthFacilityFullPathGraphQLType,
-        hfId=graphene.Int(required=True)        
+        HealthFacilityFullPathGQLType,
+        hfId=graphene.Int(required=True)
     )
 
     def resolve_health_facility_full_path(self, info, **kwargs):
@@ -43,7 +41,7 @@ class Query(graphene.ObjectType):
             user=info.context.user).request(req)
         if resp is None:
             return None
-        return HealthFacilityFullPathGraphQLType(
+        return HealthFacilityFullPathGQLType(
             hf_id=resp.hf_id,
             hf_code=resp.hf_code,
             hf_name=resp.hf_name,
