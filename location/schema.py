@@ -47,6 +47,7 @@ class HealthFacilityFullPathGQLType(graphene.ObjectType):
 
 
 class Query(graphene.ObjectType):
+    health_facilities = DjangoFilterConnectionField(HealthFacilityGQLType)
     health_facility_full_path = graphene.Field(
         HealthFacilityFullPathGQLType,
         hfId=graphene.Int(required=True)
