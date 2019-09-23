@@ -65,8 +65,10 @@ class HealthFacility(models.Model):
     validity_to = fields.DateTimeField(
         db_column='ValidityTo', blank=True, null=True)
 
-    # plserviceid = models.ForeignKey('Tblplservices', models.DO_NOTHING, db_column='PLServiceID', blank=True, null=True)
-    # plitemid = models.ForeignKey('Tblplitems', models.DO_NOTHING, db_column='PLItemID', blank=True, null=True)
+    service_pricelist = models.ForeignKey('medical_pricelist.ServicePricelist', models.DO_NOTHING,
+                                          db_column='PLServiceID', blank=True, null=True, related_name="health_facilities")
+    item_pricelist = models.ForeignKey('medical_pricelist.ItemPricelist', models.DO_NOTHING, db_column='PLItemID',
+                                       blank=True, null=True, related_name="health_facilities")
     offline = models.BooleanField(db_column='OffLine')
     # row_id = models.BinaryField(db_column='RowID', blank=True, null=True)
     audit_user_id = models.IntegerField(db_column='AuditUserID')
