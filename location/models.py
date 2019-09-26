@@ -78,6 +78,14 @@ class HealthFacility(models.Model):
         managed = False
         db_table = 'tblHF'
 
+    LEVEL_HEALTH_CENTER = 'C'
+    LEVEL_DISPENSARY = 'D'
+    LEVEL_HOSPITAL = 'H'
+
+    CARE_TYPE_IN_PATIENT = 'I'
+    CARE_TYPE_OUT_PATIENT = 'O'
+    CARE_TYPE_BOTH = 'B'
+
 
 class UserDistrict(models.Model):
     id = models.AutoField(db_column='UserDistrictID', primary_key=True)
