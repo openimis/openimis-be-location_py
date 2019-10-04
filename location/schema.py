@@ -50,11 +50,13 @@ class UserDistrictGQLType(graphene.ObjectType):
         self.region_code = district.location.parent.code
         self.region_name = district.location.parent.name
 
+
 def userDistricts(user):
     return UserDistrict.objects                 \
         .select_related('location')             \
         .select_related('location__parent')     \
-        .filter(user=user)
+        .filter(user=user)                      \
+        .exclude(location__parent__isnull=True)
 
 
 class Query(graphene.ObjectType):
