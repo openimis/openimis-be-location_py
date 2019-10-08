@@ -13,7 +13,7 @@ class LocationGQLType(DjangoObjectType):
         model = Location
         interfaces = (graphene.relay.Node,)
         filter_fields = {
-            "id": ["exact"],
+            "uuid": ["exact"],
             "code": ["exact", "istartswith", "icontains", "iexact"],
             "name": ["exact", "istartswith", "icontains", "iexact"],
             "type": ["exact"],
@@ -26,7 +26,7 @@ class HealthFacilityGQLType(DjangoObjectType):
         model = HealthFacility
         interfaces = (graphene.relay.Node,)
         filter_fields = {
-            "id": ["exact"],
+            "uuid": ["exact"],
             "code": ["exact", "istartswith", "icontains", "iexact"],
             "name": ["exact", "istartswith", "icontains", "iexact"],
             "level": ["exact"],
@@ -61,6 +61,7 @@ def userDistricts(user):
 
 class Query(graphene.ObjectType):
     health_facilities = DjangoFilterConnectionField(HealthFacilityGQLType)
+    locations = DjangoFilterConnectionField(LocationGQLType)
     user_districts = graphene.List(
         UserDistrictGQLType
     )

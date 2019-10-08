@@ -1,3 +1,4 @@
+import uuid
 from core import fields
 from django.db import models
 from core import models as core_models
@@ -5,6 +6,7 @@ from core import models as core_models
 
 class Location(models.Model):
     id = models.AutoField(db_column='LocationId', primary_key=True)
+    uuid = models.CharField(db_column='LocationUUID', max_length=36, default=uuid.uuid4, unique=True)
     legacy_id = models.IntegerField(
         db_column='LegacyId', blank=True, null=True)
     code = models.CharField(db_column='LocationCode',
@@ -39,6 +41,7 @@ class Location(models.Model):
 
 class HealthFacility(models.Model):
     id = models.AutoField(db_column='HfID', primary_key=True)
+    uuid = models.CharField(db_column='HfUUID', max_length=36, default=uuid.uuid4, unique=True)
     legacy_id = models.IntegerField(
         db_column='LegacyID', blank=True, null=True)
 
