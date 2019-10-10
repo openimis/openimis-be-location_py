@@ -6,7 +6,8 @@ from core import models as core_models
 
 class Location(models.Model):
     id = models.AutoField(db_column='LocationId', primary_key=True)
-    uuid = models.CharField(db_column='LocationUUID', max_length=36, default=uuid.uuid4, unique=True)
+    uuid = models.CharField(db_column='LocationUUID',
+                            max_length=36, default=uuid.uuid4, unique=True)
     legacy_id = models.IntegerField(
         db_column='LegacyId', blank=True, null=True)
     code = models.CharField(db_column='LocationCode',
@@ -41,7 +42,8 @@ class Location(models.Model):
 
 class HealthFacility(models.Model):
     id = models.AutoField(db_column='HfID', primary_key=True)
-    uuid = models.CharField(db_column='HfUUID', max_length=36, default=uuid.uuid4, unique=True)
+    uuid = models.CharField(
+        db_column='HfUUID', max_length=36, default=uuid.uuid4, unique=True)
     legacy_id = models.IntegerField(
         db_column='LegacyID', blank=True, null=True)
 
@@ -76,6 +78,9 @@ class HealthFacility(models.Model):
     offline = models.BooleanField(db_column='OffLine')
     # row_id = models.BinaryField(db_column='RowID', blank=True, null=True)
     audit_user_id = models.IntegerField(db_column='AuditUserID')
+
+    def __str__(self):
+        return self.code + " " + self.name
 
     class Meta:
         managed = False
