@@ -29,6 +29,7 @@ class HealthFacilityGQLType(DjangoObjectType):
         model = HealthFacility
         interfaces = (graphene.relay.Node,)
         filter_fields = {
+            "id": ["exact"],
             "uuid": ["exact"],
             "code": ["exact", "istartswith", "icontains", "iexact"],
             "name": ["exact", "istartswith", "icontains", "iexact"],
