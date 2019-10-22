@@ -4,7 +4,6 @@ from graphene_django import DjangoObjectType
 from django.core.exceptions import PermissionDenied
 from graphene_django.filter import DjangoFilterConnectionField
 from .models import HealthFacility, Location, UserDistrict
-from .services import HealthFacilityFullPathRequest, HealthFacilityFullPathService
 from .apps import LocationConfig
 from core import prefix_filterset, filter_validity
 from core import models as core_models
