@@ -24,6 +24,11 @@ class LocationGQLType(DjangoObjectType):
             "parent__id": ["exact"],  # can't import itself!
         }
 
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        queryset = queryset.filter(*filter_validity())
+        return queryset
+
 
 class HealthFacilityGQLType(DjangoObjectType):
     class Meta:
