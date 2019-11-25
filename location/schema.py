@@ -67,6 +67,7 @@ def userDistricts(user):
         .select_related('location')             \
         .select_related('location__parent')     \
         .filter(user=user)                      \
+        .filter(*filter_validity())             \
         .exclude(location__parent__isnull=True)
 
 
