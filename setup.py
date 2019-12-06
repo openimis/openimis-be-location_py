@@ -9,12 +9,12 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
     name='openimis-be-location',
-    version='0.0.1',
+    version='1.0.3',
     packages=find_packages(),
     include_package_data=True,
     license='GNU AGPL v3',
     description='The openIMIS Backend Location reference module.',
-    long_description=README,
+    # long_description=README,
     url='https://openimis.org/',
     author='Xavier Gillmann',
     author_email='xgillmann@bluesquarehub.com',
@@ -22,7 +22,8 @@ setup(
         'django',
         'django-db-signals',
         'djangorestframework',
-    ],   
+        'openimis-be-core',
+    ],
     classifiers=[
         'Environment :: Web Environment',
         'Framework :: Django',
@@ -31,7 +32,6 @@ setup(
         'License :: OSI Approved :: GNU Affero General Public License v3',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
