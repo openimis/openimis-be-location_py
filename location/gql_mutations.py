@@ -1,3 +1,4 @@
+import json
 from copy import copy
 import graphene
 from .apps import LocationConfig
@@ -7,7 +8,7 @@ from .models import *
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils.translation import gettext as _
-
+from graphene import InputObjectType
 
 class LocationCodeInputType(graphene.String):
 
@@ -116,7 +117,7 @@ class UpdateLocationMutation(OpenIMISMutation):
             return None
         except Exception as exc:
             return [{
-                'message': _("location.mutation.failed_to_create_location") % {'code': data['code']},
+                'message': _("location.mutation.failed_to_update_location") % {'code': data['code']},
                 'detail': str(exc)}]
 
 
@@ -141,7 +142,7 @@ class DeleteLocationMutation(OpenIMISMutation):
     @classmethod
     def async_mutate(cls, user, **data):
         try:
-            if not user.has_perms(LocationConfig.gql_mutation_delete_location_perms):
+            if not user.has_perms(LocationConfig.gql_mutation_delete_locations_perms):
                 raise PermissionDenied(_("unauthorized"))
             location = Location.objects.get(uuid=data['uuid'])
             np_uuid = data.get('new_parent_uuid', None)
@@ -161,7 +162,7 @@ class DeleteLocationMutation(OpenIMISMutation):
             return None
         except Exception as exc:
             return [{
-                'message': _("location.mutation.failed_to_delete") % {'code': data['code']},
+                'message': _("location.mutation.failed_to_delete_location") % {'code': data['code']},
                 'detail': str(exc)}]
 
 
@@ -203,5 +204,203 @@ class MoveLocationMutation(OpenIMISMutation):
             return None
         except Exception as exc:
             return [{
-                'message': _("location.mutation.failed_to_delete") % {'code': data['code']},
+                'message': _("location.mutation.failed_to_move_location") % {'code': data['code']},
+                'detail': str(exc)}]
+
+
+class HealthFacilityCodeInputType(graphene.String):
+
+    @staticmethod
+    def coerce_string(value):
+        assert_string_length(res, 8)
+        return res
+
+    serialize = coerce_string
+    parse_value = coerce_string
+
+    @staticmethod
+    def parse_literal(ast):
+        result = graphene.String.parse_literal(ast)
+        assert_string_length(result, 8)
+        return result
+
+
+class HealthFacilityCatchmentInputType(InputObjectType):
+    id = graphene.Int(required=False, read_only=True)
+    location_id = graphene.Int(required=True)
+    catchment = graphene.Int(required=False)
+
+
+class HealthFacilityInputType(OpenIMISMutation.Input):
+    id = graphene.Int(required=False, read_only=True)
+    uuid = graphene.String(required=False)
+    code = HealthFacilityCodeInputType(required=True)
+    name = graphene.String(required=True)
+    acc_code = graphene.String(required=False)
+    legal_form_id = graphene.String(required=False)
+    level = graphene.String(required=False)
+    sub_level_id = graphene.String(required=False)
+    location_id = graphene.Int(required=False)
+    address = graphene.String(required=False)
+    phone = graphene.String(required=False)
+    fax = graphene.String(required=False)
+    email = graphene.String(required=False)
+    care_type = graphene.String(required=False)
+    services_pricelist_id = graphene.Int(required=False)
+    items_pricelist_id = graphene.Int(required=False)
+    offline = graphene.Boolean(required=False)
+    catchments = graphene.List(HealthFacilityCatchmentInputType, required=False)
+
+
+def reset_health_facility_before_update(hf):
+    hf.code = None
+    hf.name = None
+    hf.acc_code = None
+    hf.legal_form = None
+    hf.level = None
+    hf.sub_level = None
+    hf.location = None
+    hf.address = None
+    hf.phone = None
+    hf.fax = None
+    hf.email = None
+    hf.care_type = None
+    hf.services_pricelist = None
+    hf.items_pricelist = None
+
+
+def process_catchments(user, data_catchments, prev_hf_id,
+                       hf_id, catchments):
+    prev_catchments = [c.id for c in catchments.all()]
+    from core.utils import TimeUtils
+    for catchment in data_catchments:
+        catchment_id = catchment.pop('id') if 'id' in catchment else None
+        if catchment_id:
+            prev_catchments.remove(catchment_id)
+            prev_catchment = catchments.filter(id=catchment_id, **catchment).first()
+            if not prev_catchment:
+                # catchment has been updated, let's bind the old value to prev_hf
+                prev_catchment = catchments.get(id=catchment_id)
+                prev_catchment.health_facility_id = prev_hf_id
+                prev_catchment.save()
+                # ... and create a new one with the new values
+                catchment['validity_from'] = TimeUtils.now()
+                catchment['audit_user_id'] = user.id_for_audit
+                catchment['health_facility_id'] = hf_id
+                HealthFacilityCatchment.objects.create(**catchment)
+        else:
+            catchment['validity_from'] = TimeUtils.now()
+            catchment['audit_user_id'] = user.id_for_audit
+            catchment['health_facility_id'] = hf_id
+            HealthFacilityCatchment.objects.create(**catchment)
+
+    if prev_catchments:
+        catchments.filter(id__in=prev_catchments).update(
+            health_facility_id=prev_hf_id,
+            validity_to=TimeUtils.now())
+
+
+def update_or_create_health_facility(data, user):
+    if "client_mutation_id" in data:
+        data.pop('client_mutation_id')
+    if "client_mutation_label" in data:
+        data.pop('client_mutation_label')
+    hf_uuid = data.pop('uuid') if 'uuid' in data else None
+    catchments = data.pop('catchments') if 'catchments' in data else []
+    # address may be multiline > sent as JSON
+    # update_or_create(uuid=location_uuid, ...)
+    # doesn't work because of explicit attempt to set null to uuid!
+    prev_hf_id = None
+    if hf_uuid:
+        hf = HealthFacility.objects.get(uuid=hf_uuid)
+        prev_hf_id = hf.save_history()
+        # reset the non required fields
+        # (each update is 'complete', necessary to be able to set 'null')
+        reset_health_facility_before_update(hf)
+        [setattr(hf, key, data[key]) for key in data]
+    else:
+        # UI don't foresee a field for offline > set via API (and mobile 'world' ?
+        data['offline'] = False
+        hf = HealthFacility.objects.create(**data)
+    process_catchments(user, catchments, prev_hf_id, hf.id, hf.catchments)
+    hf.save()
+
+
+class CreateHealthFacilityMutation(OpenIMISMutation):
+    _mutation_module = "location"
+    _mutation_class = "CreateHealthFacilityMutation"
+
+    class Input(HealthFacilityInputType):
+        pass
+
+    @classmethod
+    def async_mutate(cls, user, **data):
+        try:
+            if type(user) is AnonymousUser or not user.id:
+                raise ValidationError(
+                    _("mutation.authentication_required"))
+            if not user.has_perms(LocationConfig.gql_mutation_create_health_facilities_perms):
+                raise PermissionDenied(_("unauthorized"))
+
+            data['audit_user_id'] = user.id_for_audit
+            from core.utils import TimeUtils
+            data['validity_from'] = TimeUtils.now()
+            update_or_create_health_facility(data, user)
+            return None
+        except Exception as exc:
+            return [{
+                'message': _("location.mutation.failed_to_create_health_facility") % {'code': data['code']},
+                'detail': str(exc)}]
+
+
+class UpdateHealthFacilityMutation(OpenIMISMutation):
+    _mutation_module = "location"
+    _mutation_class = "UpdateHealthFacilityMutation"
+
+    class Input(HealthFacilityInputType):
+        pass
+
+    @classmethod
+    def async_mutate(cls, user, **data):
+        try:
+            if type(user) is AnonymousUser or not user.id:
+                raise ValidationError(
+                    _("mutation.authentication_required"))
+            if not user.has_perms(LocationConfig.gql_mutation_edit_health_facilities_perms):
+                raise PermissionDenied(_("unauthorized"))
+
+            data['audit_user_id'] = user.id_for_audit
+            from core.utils import TimeUtils
+            data['validity_from'] = TimeUtils.now()
+            update_or_create_health_facility(data, user)
+            return None
+        except Exception as exc:
+            return [{
+                'message': _("location.mutation.failed_to_update_health_facility") % {'code': data['code']},
+                'detail': str(exc)}]
+
+
+class DeleteHealthFacilityMutation(OpenIMISMutation):
+    _mutation_module = "location"
+    _mutation_class = "DeleteHealthFacilityMutation"
+
+    class Input(OpenIMISMutation.Input):
+        uuid = graphene.String()
+        code = graphene.String()
+
+    @classmethod
+    def async_mutate(cls, user, **data):
+        try:
+            if not user.has_perms(LocationConfig.gql_mutation_delete_health_facilities_perms):
+                raise PermissionDenied(_("unauthorized"))
+            hf = HealthFacility.objects.get(uuid=data['uuid'])
+
+            from core import datetime
+            now = datetime.datetime.now()
+            hf.validity_to = now
+            hf.save()
+            return None
+        except Exception as exc:
+            return [{
+                'message': _("location.mutation.failed_to_delete_health_facility") % {'code': data['code']},
                 'detail': str(exc)}]

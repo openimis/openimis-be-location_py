@@ -1,7 +1,7 @@
 import graphene
 from graphene_django import DjangoObjectType
-from .models import HealthFacility, Location, UserDistrict
-from core import prefix_filterset, filter_validity
+from .models import *
+from core import prefix_filterset, filter_validity, ExtendedConnection, Q
 from core import models as core_models
 
 
@@ -25,6 +25,21 @@ class LocationGQLType(DjangoObjectType):
         return queryset
 
 
+class HealthFacilityLegalFormGQLType(DjangoObjectType):
+    class Meta:
+        model = HealthFacilityLegalForm
+
+
+class HealthFacilitySubLevelGQLType(DjangoObjectType):
+    class Meta:
+        model = HealthFacilitySubLevel
+
+
+class HealthFacilityCatchmentGQLType(DjangoObjectType):
+    class Meta:
+        model = HealthFacilityCatchment
+
+
 class HealthFacilityGQLType(DjangoObjectType):
     class Meta:
         model = HealthFacility
@@ -33,10 +48,18 @@ class HealthFacilityGQLType(DjangoObjectType):
             "id": ["exact"],
             "uuid": ["exact"],
             "code": ["exact", "istartswith", "icontains", "iexact"],
+            "fax": ["exact", "istartswith", "icontains", "iexact"],
+            "email": ["exact", "istartswith", "icontains", "iexact"],
             "name": ["exact", "istartswith", "icontains", "iexact"],
             "level": ["exact"],
+            "care_type": ["exact"],
+            "legal_form__code": ["exact"],
             **prefix_filterset("location__", LocationGQLType._meta.filter_fields)
         }
+        connection_class = ExtendedConnection
+
+    def resolve_catchments(self, info):
+        return self.catchments.filter(validity_to__isnull=True)
 
 
 class UserDistrictGQLType(graphene.ObjectType):
