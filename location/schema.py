@@ -1,78 +1,25 @@
+from core.schema import signal_mutation_module_validate
 from django.db.models import Q
 import graphene
-from graphene_django import DjangoObjectType
 from django.core.exceptions import PermissionDenied
 from graphene_django.filter import DjangoFilterConnectionField
-from .models import HealthFacility, Location, UserDistrict
-from .apps import LocationConfig
 from core import prefix_filterset, filter_validity
 from core import models as core_models
+from core.schema import TinyInt, SmallInt, OpenIMISMutation, OrderedDjangoFilterConnectionField
+from .models import *
 from django.utils.translation import gettext as _
+import graphene_django_optimizer as gql_optimizer
 
-
-class LocationGQLType(DjangoObjectType):
-    class Meta:
-        model = Location
-        interfaces = (graphene.relay.Node,)
-        filter_fields = {
-            "id": ["exact"],
-            "uuid": ["exact"],
-            "code": ["exact", "istartswith", "icontains", "iexact"],
-            "name": ["exact", "istartswith", "icontains", "iexact"],
-            "type": ["exact"],
-            "parent__uuid": ["exact"],  # can't import itself!
-            "parent__id": ["exact"],  # can't import itself!
-        }
-
-
-class HealthFacilityGQLType(DjangoObjectType):
-    class Meta:
-        model = HealthFacility
-        interfaces = (graphene.relay.Node,)
-        filter_fields = {
-            "id": ["exact"],
-            "uuid": ["exact"],
-            "code": ["exact", "istartswith", "icontains", "iexact"],
-            "name": ["exact", "istartswith", "icontains", "iexact"],
-            "level": ["exact"],
-            **prefix_filterset("location__", LocationGQLType._meta.filter_fields)
-        }
-
-
-class UserDistrictGQLType(graphene.ObjectType):
-    id = graphene.Int()
-    uuid = graphene.String()
-    code = graphene.String()
-    name = graphene.String()
-    region_id = graphene.Int()
-    region_uuid = graphene.String()
-    region_code = graphene.String()
-    region_name = graphene.String()
-
-    def __init__(self, district):
-        self.id = district.location.id
-        self.uuid = district.location.uuid
-        self.code = district.location.code
-        self.name = district.location.name
-        self.region_id = district.location.parent.id
-        self.region_uuid = district.location.parent.uuid
-        self.region_code = district.location.parent.code
-        self.region_name = district.location.parent.name
-
-
-def userDistricts(user):
-    if not isinstance(user, core_models.InteractiveUser):
-        return []
-    return UserDistrict.objects                 \
-        .select_related('location')             \
-        .select_related('location__parent')     \
-        .filter(user=user)                      \
-        .filter(*filter_validity())             \
-        .exclude(location__parent__isnull=True)
+from .gql_queries import *
+from .gql_mutations import *
 
 
 class Query(graphene.ObjectType):
-    health_facilities = DjangoFilterConnectionField(HealthFacilityGQLType)
+    health_facilities = OrderedDjangoFilterConnectionField(
+        HealthFacilityGQLType,
+        showHistory=graphene.Boolean(),
+        orderBy=graphene.List(of_type=graphene.String)
+    )
     locations = DjangoFilterConnectionField(LocationGQLType)
     user_districts = graphene.List(
         UserDistrictGQLType
@@ -87,12 +34,17 @@ class Query(graphene.ObjectType):
     def resolve_health_facilities(self, info, **kwargs):
         if not info.context.user.has_perms(LocationConfig.gql_query_health_facilities_perms):
             raise PermissionDenied(_("unauthorized"))
-        pass
+        query = HealthFacility.objects
+        show_history = kwargs.get('showHistory', False)
+        if not show_history:
+            query = query.filter(*filter_validity())
+        return gql_optimizer.query(query.all(), info)
 
     def resolve_locations(self, info, **kwargs):
         if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
             raise PermissionDenied(_("unauthorized"))
-        pass
+        query = Location.objects
+        return gql_optimizer.query(query.all(), info)
 
     def resolve_health_facilities_str(self, info, **kwargs):
         if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
@@ -119,3 +71,32 @@ class Query(graphene.ObjectType):
             raise NotImplementedError(
                 'Only Interactive Users are registered for districts')
         return [UserDistrictGQLType(d) for d in userDistricts(info.context.user._u)]
+
+
+class Mutation(graphene.ObjectType):
+    create_location = CreateLocationMutation.Field()
+    update_location = UpdateLocationMutation.Field()
+    delete_location = DeleteLocationMutation.Field()
+    move_location = MoveLocationMutation.Field()
+    create_health_facility = CreateHealthFacilityMutation.Field()
+    update_health_facility = UpdateHealthFacilityMutation.Field()
+    delete_health_facility = DeleteHealthFacilityMutation.Field()
+
+
+def on_location_mutation(sender, **kwargs):
+    uuid = kwargs['data'].get('uuid', None)
+    if not uuid:
+        return []
+    if "Location" in str(sender._mutation_class):
+        impacted_location = Location.objects.get(uuid=uuid)
+        LocationMutation.objects.create(
+            location=impacted_location, mutation_id=kwargs['mutation_log_id'])
+    if "HealthFacility" in str(sender._mutation_class):
+        impacted_health_facility = HealthFacility.objects.get(uuid=uuid)
+        HealthFacilityMutation.objects.create(
+            health_facility=impacted_health_facility, mutation_id=kwargs['mutation_log_id'])
+    return []
+
+
+def bind_signals():
+    signal_mutation_module_validate["location"].connect(on_location_mutation)
