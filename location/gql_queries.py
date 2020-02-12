@@ -1,4 +1,5 @@
 import graphene
+import base64
 from graphene_django import DjangoObjectType
 from .models import *
 from core import prefix_filterset, filter_validity, ExtendedConnection, Q
@@ -61,26 +62,31 @@ class HealthFacilityGQLType(DjangoObjectType):
     def resolve_catchments(self, info):
         return self.catchments.filter(validity_to__isnull=True)
 
-
-class UserDistrictGQLType(graphene.ObjectType):
-    id = graphene.Int()
+class UserRegionGQLType(graphene.ObjectType):
+    id = graphene.String()
     uuid = graphene.String()
     code = graphene.String()
     name = graphene.String()
-    region_id = graphene.Int()
-    region_uuid = graphene.String()
-    region_code = graphene.String()
-    region_name = graphene.String()
+
+    def __init__(self, region):
+        self.id = str(base64.b64encode(f"LocationGQLType:{region.id}".encode()), 'utf-8')
+        self.uuid = region.uuid
+        self.code = region.code
+        self.name = region.name
+
+class UserDistrictGQLType(graphene.ObjectType):
+    id = graphene.String()
+    uuid = graphene.String()
+    code = graphene.String()
+    name = graphene.String()
+    parent = graphene.Field(UserRegionGQLType)
 
     def __init__(self, district):
-        self.id = district.location.id
+        self.id = str(base64.b64encode(f"LocationGQLType:{district.location.id}".encode()), 'utf-8')
         self.uuid = district.location.uuid
         self.code = district.location.code
         self.name = district.location.name
-        self.region_id = district.location.parent.id
-        self.region_uuid = district.location.parent.uuid
-        self.region_code = district.location.parent.code
-        self.region_name = district.location.parent.name
+        self.parent = UserRegionGQLType(district.location.parent)
 
 
 def userDistricts(user):
@@ -91,4 +97,6 @@ def userDistricts(user):
         .select_related('location__parent') \
         .filter(user=user) \
         .filter(*filter_validity()) \
+        .order_by('location__parent_code') \
+        .order_by('location__code') \
         .exclude(location__parent__isnull=True)
