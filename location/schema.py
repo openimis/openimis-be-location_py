@@ -37,7 +37,7 @@ class Query(graphene.ObjectType):
         query = HealthFacility.objects
         show_history = kwargs.get('showHistory', False)
         if not show_history:
-            query = query.filter(*filter_validity())
+            query = query.filter(*filter_validity(**kwargs))
         return gql_optimizer.query(query.all(), info)
 
     def resolve_locations(self, info, **kwargs):
