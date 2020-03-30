@@ -1,7 +1,10 @@
 import uuid
-from core import fields
+from core import fields, filter_validity
+from django.conf import settings
 from django.db import models
 from core import models as core_models
+from graphql import ResolveInfo
+
 from .apps import LocationConfig
 
 
@@ -100,6 +103,21 @@ class HealthFacility(core_models.VersionedModel):
     def __str__(self):
         return self.code + " " + self.name
 
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        queryset = cls.filter_queryset(queryset)
+        # GraphQL calls with an info object while Rest calls with the user itself
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            dist = UserDistrict.get_user_districts(user._u)
+            return queryset.filter(
+                location_id__in=[l.location.id for l in dist]
+            )
+        return queryset
+
     class Meta:
         managed = False
         db_table = 'tblHF'
@@ -155,6 +173,19 @@ class UserDistrict(models.Model):
     class Meta:
         managed = False
         db_table = 'tblUsersDistricts'
+
+    @classmethod
+    def get_user_districts(cls, user):
+        if not isinstance(user, core_models.InteractiveUser):
+            return []
+        return UserDistrict.objects \
+            .select_related('location') \
+            .select_related('location__parent') \
+            .filter(user=user) \
+            .filter(*filter_validity()) \
+            .order_by('location__parent_code') \
+            .order_by('location__code') \
+            .exclude(location__parent__isnull=True)
 
 
 class LocationMutation(core_models.UUIDModel):
