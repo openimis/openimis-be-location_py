@@ -59,8 +59,8 @@ class Query(graphene.ObjectType):
         region_uuid = kwargs.get('region_uuid')
         if region_uuid is not None:
             filters += [Q(location__parent__uuid=region_uuid)]
-        dist = userDistricts(info.context.user._u)
-        filters += [Q(location__id__in=[l.location.id for l in dist])]
+        dist = UserDistrict.get_user_districts(info.context.user._u)
+        filters += [Q(location__id__in=[l.location_id for l in dist])]
         return HealthFacility.objects.filter(*filters)
 
     def resolve_user_districts(self, info, **kwargs):
@@ -70,7 +70,7 @@ class Query(graphene.ObjectType):
         if not isinstance(info.context.user._u, core_models.InteractiveUser):
             raise NotImplementedError(
                 'Only Interactive Users are registered for districts')
-        return [UserDistrictGQLType(d) for d in userDistricts(info.context.user._u)]
+        return [UserDistrictGQLType(d) for d in UserDistrict.get_user_districts(info.context.user._u)]
 
 
 class Mutation(graphene.ObjectType):

@@ -62,6 +62,7 @@ class HealthFacilityGQLType(DjangoObjectType):
     def resolve_catchments(self, info):
         return self.catchments.filter(validity_to__isnull=True)
 
+
 class UserRegionGQLType(graphene.ObjectType):
     id = graphene.String()
     uuid = graphene.String()
@@ -74,6 +75,7 @@ class UserRegionGQLType(graphene.ObjectType):
         self.code = region.code
         self.name = region.name
 
+
 class UserDistrictGQLType(graphene.ObjectType):
     id = graphene.String()
     uuid = graphene.String()
@@ -82,21 +84,8 @@ class UserDistrictGQLType(graphene.ObjectType):
     parent = graphene.Field(UserRegionGQLType)
 
     def __init__(self, district):
-        self.id = str(base64.b64encode(f"LocationGQLType:{district.location.id}".encode()), 'utf-8')
+        self.id = str(base64.b64encode(f"LocationGQLType:{district.location_id}".encode()), 'utf-8')
         self.uuid = district.location.uuid
         self.code = district.location.code
         self.name = district.location.name
         self.parent = UserRegionGQLType(district.location.parent)
-
-
-def userDistricts(user):
-    if not isinstance(user, core_models.InteractiveUser):
-        return []
-    return UserDistrict.objects \
-        .select_related('location') \
-        .select_related('location__parent') \
-        .filter(user=user) \
-        .filter(*filter_validity()) \
-        .order_by('location__parent_code') \
-        .order_by('location__code') \
-        .exclude(location__parent__isnull=True)
