@@ -84,7 +84,7 @@ class UserDistrictGQLType(graphene.ObjectType):
     parent = graphene.Field(UserRegionGQLType)
 
     def __init__(self, district):
-        self.id = str(base64.b64encode(f"LocationGQLType:{district.location.id}".encode()), 'utf-8')
+        self.id = str(base64.b64encode(f"LocationGQLType:{district.location_id}".encode()), 'utf-8')
         self.uuid = district.location.uuid
         self.code = district.location.code
         self.name = district.location.name

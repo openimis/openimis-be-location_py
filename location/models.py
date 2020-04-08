@@ -114,7 +114,7 @@ class HealthFacility(core_models.VersionedModel):
         if settings.ROW_SECURITY:
             dist = UserDistrict.get_user_districts(user._u)
             return queryset.filter(
-                location_id__in=[l.location.id for l in dist]
+                location_id__in=[l.location_id for l in dist]
             )
         return queryset
 
@@ -185,7 +185,8 @@ class UserDistrict(models.Model):
             .filter(*filter_validity()) \
             .order_by('location__parent_code') \
             .order_by('location__code') \
-            .exclude(location__parent__isnull=True)
+            .exclude(location__parent__isnull=True) \
+            .all()
 
 
 class LocationMutation(core_models.UUIDModel):

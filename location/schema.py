@@ -60,7 +60,7 @@ class Query(graphene.ObjectType):
         if region_uuid is not None:
             filters += [Q(location__parent__uuid=region_uuid)]
         dist = UserDistrict.get_user_districts(info.context.user._u)
-        filters += [Q(location__id__in=[l.location.id for l in dist])]
+        filters += [Q(location__id__in=[l.location_id for l in dist])]
         return HealthFacility.objects.filter(*filters)
 
     def resolve_user_districts(self, info, **kwargs):
