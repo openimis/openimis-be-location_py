@@ -1,9 +1,9 @@
 import graphene
 import base64
 from graphene_django import DjangoObjectType
-from .models import *
-from core import prefix_filterset, filter_validity, ExtendedConnection, Q
-from core import models as core_models
+from core import prefix_filterset, filter_validity, ExtendedConnection
+from location.models import HealthFacilityLegalForm, Location, HealthFacilitySubLevel, HealthFacilityCatchment, \
+    HealthFacility
 
 
 class LocationGQLType(DjangoObjectType):
