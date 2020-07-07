@@ -1,10 +1,11 @@
+from functools import reduce
 import uuid
 from core import fields, filter_validity
 from django.conf import settings
 from django.db import models
 from core import models as core_models
 from graphql import ResolveInfo
-
+from .apps import LocationConfig
 
 class Location(core_models.VersionedModel):
     id = models.AutoField(db_column='LocationId', primary_key=True)
@@ -30,6 +31,27 @@ class Location(core_models.VersionedModel):
     # rowid = models.TextField(db_column='RowId')
     audit_user_id = models.IntegerField(
         db_column='AuditUserId', blank=True, null=True)
+
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        queryset = cls.filter_queryset(queryset)
+        # GraphQL calls with an info object while Rest calls with the user itself
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            dists = UserDistrict.get_user_districts(user._u)
+            regs = set([d.location.parent.id for d in dists])
+            dists = set([d.location.id for d in dists])
+            filters = []
+            prev = "id"
+            for i, tpe in enumerate(LocationConfig.location_types):
+                loc_ids = dists if i else regs
+                filters += [models.Q(type__exact=tpe) & models.Q(**{"%s__in" % prev: loc_ids})]
+                prev = "parent__" + prev if i > 1 else "parent_" + prev if i else prev
+            return queryset.filter(reduce((lambda x, y: x | y), filters))
+        return queryset
 
     class Meta:
         managed = False

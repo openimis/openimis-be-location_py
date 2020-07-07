@@ -22,8 +22,7 @@ class LocationGQLType(DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        queryset = queryset.filter(*filter_validity())
-        return queryset
+        return Location.get_queryset(queryset, info)
 
 
 class HealthFacilityLegalFormGQLType(DjangoObjectType):
