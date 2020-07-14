@@ -61,8 +61,8 @@ class Location(core_models.VersionedModel):
 class HealthFacilityLegalForm(models.Model):
     code = models.CharField(db_column='LegalFormCode', primary_key=True, max_length=1)
     legal_form = models.CharField(db_column='LegalForms', max_length=50)
-    sortorder = models.IntegerField(db_column='SortOrder', blank=True, null=True)
-    altlanguage = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
+    sort_order = models.IntegerField(db_column='SortOrder', blank=True, null=True)
+    alt_language = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
 
     class Meta:
         managed = False
@@ -72,8 +72,8 @@ class HealthFacilityLegalForm(models.Model):
 class HealthFacilitySubLevel(models.Model):
     code = models.CharField(db_column='HFSublevel', primary_key=True, max_length=1)
     health_facility_sub_level = models.CharField(db_column='HFSublevelDesc', max_length=50, blank=True, null=True)
-    sortorder = models.IntegerField(db_column='SortOrder', blank=True, null=True)
-    altlanguage = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
+    sort_order = models.IntegerField(db_column='SortOrder', blank=True, null=True)
+    alt_language = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
 
     class Meta:
         managed = False
