@@ -5,8 +5,6 @@ from django.db import models
 from core import models as core_models
 from graphql import ResolveInfo
 
-from .apps import LocationConfig
-
 
 class Location(core_models.VersionedModel):
     id = models.AutoField(db_column='LocationId', primary_key=True)

@@ -1,21 +1,19 @@
-import json
-from copy import copy
 import graphene
 from .apps import LocationConfig
-from core import prefix_filterset, ExtendedConnection, filter_validity, Q, assert_string_length
-from core.schema import TinyInt, SmallInt, OpenIMISMutation, OrderedDjangoFilterConnectionField
-from .models import *
+from core import assert_string_length, filter_validity
+from core.schema import OpenIMISMutation
+from .models import Location, HealthFacilityCatchment, HealthFacility
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils.translation import gettext as _
 from graphene import InputObjectType
 
-class LocationCodeInputType(graphene.String):
 
+class LocationCodeInputType(graphene.String):
     @staticmethod
     def coerce_string(value):
-        assert_string_length(res, 8)
-        return res
+        assert_string_length(value, 8)
+        return value
 
     serialize = coerce_string
     parse_value = coerce_string
@@ -67,7 +65,23 @@ def update_or_create_location(data, user):
     location.save()
 
 
-class CreateLocationMutation(OpenIMISMutation):
+class CreateOrUpdateLocationMutation(OpenIMISMutation):
+    @classmethod
+    def do_mutate(cls, perms, user, **data):
+        if type(user) is AnonymousUser or not user.id:
+            raise ValidationError(
+                _("mutation.authentication_required"))
+        if not user.has_perms(perms):
+            raise PermissionDenied(_("unauthorized"))
+
+        data['audit_user_id'] = user.id_for_audit
+        from core.utils import TimeUtils
+        data['validity_from'] = TimeUtils.now()
+        update_or_create_location(data, user)
+        return None
+
+
+class CreateLocationMutation(CreateOrUpdateLocationMutation):
     _mutation_module = "location"
     _mutation_class = "CreateLocationMutation"
 
@@ -77,24 +91,14 @@ class CreateLocationMutation(OpenIMISMutation):
     @classmethod
     def async_mutate(cls, user, **data):
         try:
-            if type(user) is AnonymousUser or not user.id:
-                raise ValidationError(
-                    _("mutation.authentication_required"))
-            if not user.has_perms(LocationConfig.gql_mutation_create_locations_perms):
-                raise PermissionDenied(_("unauthorized"))
-
-            data['audit_user_id'] = user.id_for_audit
-            from core.utils import TimeUtils
-            data['validity_from'] = TimeUtils.now()
-            update_or_create_location(data, user)
-            return None
+            return cls.do_mutate(LocationConfig.gql_mutation_create_locations_perms, user, **data)
         except Exception as exc:
             return [{
                 'message': _("location.mutation.failed_to_create_location") % {'code': data['code']},
                 'detail': str(exc)}]
 
 
-class UpdateLocationMutation(OpenIMISMutation):
+class UpdateLocationMutation(CreateOrUpdateLocationMutation):
     _mutation_module = "location"
     _mutation_class = "UpdateLocationMutation"
 
@@ -104,17 +108,7 @@ class UpdateLocationMutation(OpenIMISMutation):
     @classmethod
     def async_mutate(cls, user, **data):
         try:
-            if type(user) is AnonymousUser or not user.id:
-                raise ValidationError(
-                    _("mutation.authentication_required"))
-            if not user.has_perms(LocationConfig.gql_mutation_edit_locations_perms):
-                raise PermissionDenied(_("unauthorized"))
-
-            data['audit_user_id'] = user.id_for_audit
-            from core.utils import TimeUtils
-            data['validity_from'] = TimeUtils.now()
-            update_or_create_location(data, user)
-            return None
+            return cls.do_mutate(LocationConfig.gql_mutation_edit_locations_perms, user, **data)
         except Exception as exc:
             return [{
                 'message': _("location.mutation.failed_to_update_location") % {'code': data['code']},
@@ -212,8 +206,8 @@ class HealthFacilityCodeInputType(graphene.String):
 
     @staticmethod
     def coerce_string(value):
-        assert_string_length(res, 8)
-        return res
+        assert_string_length(value, 8)
+        return value
 
     serialize = coerce_string
     parse_value = coerce_string

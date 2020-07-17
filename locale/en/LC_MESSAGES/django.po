@@ -1,0 +1,58 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2020-06-05 10:39+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: location/gql_mutations.py:73 location/gql_mutations.py:335
+#: location/gql_mutations.py:362
+msgid "mutation.authentication_required"
+msgstr "User needs to be authenticated for this operation"
+
+#: location/gql_mutations.py:75 location/gql_mutations.py:140
+#: location/gql_mutations.py:187 location/gql_mutations.py:337
+#: location/gql_mutations.py:364 location/gql_mutations.py:389
+#: location/schema.py:32 location/schema.py:41 location/schema.py:47
+msgid "unauthorized"
+msgstr "User not authorized for this operation"
+
+#: location/location/gql_mutations.py:93
+msgid "location.mutation.failed_to_create_location"
+msgstr "Failed create location %(code)"
+
+#: location/location/gql_mutations.py:120
+msgid "location.mutation.failed_to_update_location"
+msgstr "Failed to update location %(code)"
+
+#: location/location/gql_mutations.py:165
+msgid "location.mutation.failed_to_delete_location"
+msgstr "Failed delete location %(code)"
+
+#: location/location/gql_mutations.py:207
+msgid "location.mutation.failed_to_move_location"
+msgstr "Failed to move location %(code)"
+
+#: location/location/gql_mutations.py:352
+msgid "location.mutation.failed_to_create_health_facility"
+msgstr "Failed create health facility %(code)"
+
+#: location/location/gql_mutations.py:379
+msgid "location.mutation.failed_to_update_health_facility"
+msgstr "Failed to update health facility %(code)"
+
+#: location/location/gql_mutations.py:405
+msgid "location.mutation.failed_to_delete_health_facility"
+msgstr "Failed delete health facility %(code)"
