@@ -48,10 +48,11 @@ class HealthFacilityGQLType(DjangoObjectType):
             "id": ["exact"],
             "uuid": ["exact"],
             "code": ["exact", "istartswith", "icontains", "iexact"],
-            "fax": ["exact", "istartswith", "icontains", "iexact"],
-            "email": ["exact", "istartswith", "icontains", "iexact"],
+            "fax": ["exact", "istartswith", "icontains", "iexact", "isnull"],
+            "email": ["exact", "istartswith", "icontains", "iexact", "isnull"],
             "name": ["exact", "istartswith", "icontains", "iexact"],
             "level": ["exact"],
+            "sub_level": ["exact", "isnull"],
             "care_type": ["exact"],
             "legal_form__code": ["exact"],
             **prefix_filterset("location__", LocationGQLType._meta.filter_fields)
