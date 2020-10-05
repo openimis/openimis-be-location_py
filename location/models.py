@@ -32,6 +32,9 @@ class Location(core_models.VersionedModel):
     audit_user_id = models.IntegerField(
         db_column='AuditUserId', blank=True, null=True)
 
+    def __str__(self):
+        return self.code + " " + self.name
+
     @classmethod
     def get_queryset(cls, queryset, user):
         queryset = cls.filter_queryset(queryset)
