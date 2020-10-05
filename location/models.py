@@ -1,10 +1,11 @@
+from functools import reduce
 import uuid
 from core import fields, filter_validity
 from django.conf import settings
 from django.db import models
 from core import models as core_models
 from graphql import ResolveInfo
-
+from .apps import LocationConfig
 
 class Location(core_models.VersionedModel):
     id = models.AutoField(db_column='LocationId', primary_key=True)
@@ -43,10 +44,16 @@ class Location(core_models.VersionedModel):
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
         if settings.ROW_SECURITY:
-            dist = UserDistrict.get_user_districts(user._u)
-            return queryset.filter(
-                location_id__in=[l.location_id for l in dist]
-            )
+            dists = UserDistrict.get_user_districts(user._u)
+            regs = set([d.location.parent.id for d in dists])
+            dists = set([d.location.id for d in dists])
+            filters = []
+            prev = "id"
+            for i, tpe in enumerate(LocationConfig.location_types):
+                loc_ids = dists if i else regs
+                filters += [models.Q(type__exact=tpe) & models.Q(**{"%s__in" % prev: loc_ids})]
+                prev = "parent__" + prev if i > 1 else "parent_" + prev if i else prev
+            return queryset.filter(reduce((lambda x, y: x | y), filters))
         return queryset
 
     class Meta:
@@ -57,8 +64,8 @@ class Location(core_models.VersionedModel):
 class HealthFacilityLegalForm(models.Model):
     code = models.CharField(db_column='LegalFormCode', primary_key=True, max_length=1)
     legal_form = models.CharField(db_column='LegalForms', max_length=50)
-    sortorder = models.IntegerField(db_column='SortOrder', blank=True, null=True)
-    altlanguage = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
+    sort_order = models.IntegerField(db_column='SortOrder', blank=True, null=True)
+    alt_language = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
 
     class Meta:
         managed = False
@@ -68,8 +75,8 @@ class HealthFacilityLegalForm(models.Model):
 class HealthFacilitySubLevel(models.Model):
     code = models.CharField(db_column='HFSublevel', primary_key=True, max_length=1)
     health_facility_sub_level = models.CharField(db_column='HFSublevelDesc', max_length=50, blank=True, null=True)
-    sortorder = models.IntegerField(db_column='SortOrder', blank=True, null=True)
-    altlanguage = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
+    sort_order = models.IntegerField(db_column='SortOrder', blank=True, null=True)
+    alt_language = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
 
     class Meta:
         managed = False

@@ -7,6 +7,8 @@ from location.models import HealthFacilityLegalForm, Location, HealthFacilitySub
 
 
 class LocationGQLType(DjangoObjectType):
+    client_mutation_id = graphene.String()
+
     class Meta:
         model = Location
         interfaces = (graphene.relay.Node,)
@@ -20,10 +22,14 @@ class LocationGQLType(DjangoObjectType):
             "parent__id": ["exact"],  # can't import itself!
         }
 
+    def resolve_client_mutation_id(self, info):
+        location_mutation = self.mutations.select_related(
+            'mutation').filter(mutation__status=0).first()
+        return location_mutation.mutation.client_mutation_id if location_mutation else None
+
     @classmethod
     def get_queryset(cls, queryset, info):
-        queryset = queryset.filter(*filter_validity())
-        return queryset
+        return Location.get_queryset(queryset, info)
 
 
 class HealthFacilityLegalFormGQLType(DjangoObjectType):
@@ -42,6 +48,8 @@ class HealthFacilityCatchmentGQLType(DjangoObjectType):
 
 
 class HealthFacilityGQLType(DjangoObjectType):
+    client_mutation_id = graphene.String()
+
     class Meta:
         model = HealthFacility
         interfaces = (graphene.relay.Node,)
@@ -49,10 +57,11 @@ class HealthFacilityGQLType(DjangoObjectType):
             "id": ["exact"],
             "uuid": ["exact"],
             "code": ["exact", "istartswith", "icontains", "iexact"],
-            "fax": ["exact", "istartswith", "icontains", "iexact"],
-            "email": ["exact", "istartswith", "icontains", "iexact"],
+            "fax": ["exact", "istartswith", "icontains", "iexact", "isnull"],
+            "email": ["exact", "istartswith", "icontains", "iexact", "isnull"],
             "name": ["exact", "istartswith", "icontains", "iexact"],
             "level": ["exact"],
+            "sub_level": ["exact", "isnull"],
             "care_type": ["exact"],
             "legal_form__code": ["exact"],
             **prefix_filterset("location__", LocationGQLType._meta.filter_fields)
@@ -61,6 +70,11 @@ class HealthFacilityGQLType(DjangoObjectType):
 
     def resolve_catchments(self, info):
         return self.catchments.filter(validity_to__isnull=True)
+
+    def resolve_client_mutation_id(self, info):
+        health_facility_mutation = self.mutations.select_related(
+            'mutation').filter(mutation__status=0).first()
+        return health_facility_mutation.mutation.client_mutation_id if health_facility_mutation else None
 
 
 class UserRegionGQLType(graphene.ObjectType):
