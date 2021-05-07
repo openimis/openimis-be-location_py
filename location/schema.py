@@ -1,11 +1,7 @@
 from core.schema import signal_mutation_module_validate
 from django.db.models import Q
-import graphene
-from django.core.exceptions import PermissionDenied
 from graphene_django.filter import DjangoFilterConnectionField
-from core import prefix_filterset, filter_validity
-from core import models as core_models
-from core.schema import TinyInt, SmallInt, OpenIMISMutation, OrderedDjangoFilterConnectionField
+from core.schema import OrderedDjangoFilterConnectionField
 from .models import *
 from django.utils.translation import gettext as _
 import graphene_django_optimizer as gql_optimizer
@@ -21,6 +17,10 @@ class Query(graphene.ObjectType):
         orderBy=graphene.List(of_type=graphene.String)
     )
     locations = DjangoFilterConnectionField(LocationGQLType)
+    locations_str = DjangoFilterConnectionField(
+        LocationGQLType,
+        str=graphene.String(),
+    )
     user_districts = graphene.List(
         UserDistrictGQLType
     )
@@ -45,6 +45,15 @@ class Query(graphene.ObjectType):
             raise PermissionDenied(_("unauthorized"))
         query = Location.objects
         return gql_optimizer.query(query.all(), info)
+
+    def resolve_locations_str(self, info, **kwargs):
+        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+            raise PermissionDenied(_("unauthorized"))
+        filters = [*filter_validity(**kwargs)]
+        str = kwargs.get('str')
+        if str is not None:
+            filters += [Q(code__icontains=str) | Q(name__icontains=str)]
+        return Location.objects.filter(*filters)
 
     def resolve_health_facilities_str(self, info, **kwargs):
         if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
