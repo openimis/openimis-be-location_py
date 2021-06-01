@@ -211,6 +211,42 @@ class UserDistrict(models.Model):
             .exclude(location__parent__isnull=True) \
             .all()
 
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            pass
+        return queryset
+
+
+class OfficerVillage(models.Model):
+    id = models.AutoField(db_column='OfficerVillageId', primary_key=True)
+    legacy_id = models.IntegerField(db_column='LegacyID', blank=True, null=True)
+    officer = models.ForeignKey(core_models.Officer, models.DO_NOTHING, db_column='OfficerId',
+                                related_name="officer_villages")
+    location = models.ForeignKey(Location, models.DO_NOTHING, db_column='LocationId',
+                                 related_name="officer_villages")
+    validity_from = fields.DateTimeField(db_column='ValidityFrom')
+    validity_to = fields.DateTimeField(db_column='ValidityTo', blank=True, null=True)
+    audit_user_id = models.IntegerField(db_column='AuditUserID')
+
+    class Meta:
+        managed = False
+        db_table = 'tblOfficerVillages'
+
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            pass
+        return queryset
+
 
 class LocationMutation(core_models.UUIDModel):
     location = models.ForeignKey(Location, models.DO_NOTHING,
