@@ -182,15 +182,11 @@ class HealthFacilityCatchment(models.Model):
 
 class UserDistrict(models.Model):
     id = models.AutoField(db_column='UserDistrictID', primary_key=True)
-    legacy_id = models.IntegerField(
-        db_column='LegacyID', blank=True, null=True)
-    user = models.ForeignKey(
-        core_models.InteractiveUser, models.DO_NOTHING, db_column='UserID')
-    location = models.ForeignKey(
-        Location, models.DO_NOTHING, db_column='LocationId')
+    legacy_id = models.IntegerField(db_column='LegacyID', blank=True, null=True)
+    user = models.ForeignKey(core_models.InteractiveUser, models.DO_NOTHING, db_column='UserID')
+    location = models.ForeignKey(Location, models.DO_NOTHING, db_column='LocationId')
     validity_from = fields.DateTimeField(db_column='ValidityFrom')
-    validity_to = fields.DateTimeField(
-        db_column='ValidityTo', blank=True, null=True)
+    validity_to = fields.DateTimeField(db_column='ValidityTo', blank=True, null=True)
     audit_user_id = models.IntegerField(db_column='AuditUserID')
 
     class Meta:
@@ -199,6 +195,11 @@ class UserDistrict(models.Model):
 
     @classmethod
     def get_user_districts(cls, user):
+        """
+        Retrieve the list of UserDistricts for a user, the locations are prefetched on two levels.
+        :param user: InteractiveUser to filter on
+        :return: UserDistrict *objects*
+        """
         if not isinstance(user, core_models.InteractiveUser):
             return []
         return UserDistrict.objects \
@@ -208,8 +209,21 @@ class UserDistrict(models.Model):
             .filter(*filter_validity()) \
             .order_by('location__parent_code') \
             .order_by('location__code') \
-            .exclude(location__parent__isnull=True) \
-            .all()
+            .exclude(location__parent__isnull=True)
+
+    @classmethod
+    def get_user_locations(cls, user):
+        """
+        Retrieve the list of Locations in the UserDistricts of a certain user.
+        :param user: InteractiveUser to filter on
+        :return: Location objects to filter on.
+        """
+        if not core_models.InteractiveUser.is_interactive_user(user):
+            return Location.objects.none()
+        return Location.objects \
+            .filter(*filter_validity()) \
+            .filter(parent__parent__userdistrict__user=user.i_user) \
+            .order_by("code")
 
     @classmethod
     def get_queryset(cls, queryset, user):
