@@ -239,9 +239,9 @@ class UserDistrict(models.Model):
 class OfficerVillage(models.Model):
     id = models.AutoField(db_column='OfficerVillageId', primary_key=True)
     legacy_id = models.IntegerField(db_column='LegacyID', blank=True, null=True)
-    officer = models.ForeignKey(core_models.Officer, models.DO_NOTHING, db_column='OfficerId',
+    officer = models.ForeignKey(core_models.Officer, models.CASCADE, db_column='OfficerId',
                                 related_name="officer_villages")
-    location = models.ForeignKey(Location, models.DO_NOTHING, db_column='LocationId',
+    location = models.ForeignKey(Location, models.CASCADE, db_column='LocationId',
                                  related_name="officer_villages")
     validity_from = fields.DateTimeField(db_column='ValidityFrom')
     validity_to = fields.DateTimeField(db_column='ValidityTo', blank=True, null=True)
