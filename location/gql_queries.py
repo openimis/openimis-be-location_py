@@ -3,7 +3,7 @@ import base64
 from graphene_django import DjangoObjectType
 from core import prefix_filterset, filter_validity, ExtendedConnection
 from location.models import HealthFacilityLegalForm, Location, HealthFacilitySubLevel, HealthFacilityCatchment, \
-    HealthFacility
+    HealthFacility, UserDistrict, OfficerVillage
 
 
 class LocationGQLType(DjangoObjectType):
@@ -103,3 +103,27 @@ class UserDistrictGQLType(graphene.ObjectType):
         self.code = district.location.code
         self.name = district.location.name
         self.parent = UserRegionGQLType(district.location.parent)
+
+
+class UserDistrictType(DjangoObjectType):
+    class Meta:
+        model = UserDistrict
+        filter_fields = {
+            "id": ["exact"],
+            "user": ["exact"],
+            "location": ["exact"],
+        }
+        connection_class = ExtendedConnection
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return UserDistrict.get_queryset(queryset, info)
+
+
+class OfficerVillageGQLType(DjangoObjectType):
+    class Meta:
+        model = OfficerVillage
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return OfficerVillage.get_queryset(queryset, info).filter(validity_to__isnull=True)
