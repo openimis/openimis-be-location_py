@@ -7,6 +7,7 @@ from core import models as core_models
 from graphql import ResolveInfo
 from .apps import LocationConfig
 
+
 class Location(core_models.VersionedModel):
     id = models.AutoField(db_column='LocationId', primary_key=True)
     uuid = models.CharField(db_column='LocationUUID',
@@ -43,7 +44,10 @@ class Location(core_models.VersionedModel):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
-        if settings.ROW_SECURITY:
+
+        # OMT-280: if you create a new region and your user has district limitations, you won't find what you
+        # just created. So we'll consider that if you were allowed to create it, you are also allowed to retrieve it.
+        if settings.ROW_SECURITY and not user.has_perms(LocationConfig.gql_mutation_create_locations_perms):
             dists = UserDistrict.get_user_districts(user._u)
             regs = set([d.location.parent.id for d in dists])
             dists = set([d.location.id for d in dists])
