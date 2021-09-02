@@ -131,11 +131,14 @@ class HealthFacility(core_models.VersionedModel):
         return self.code + " " + self.name
 
     @classmethod
-    def get_queryset(cls, queryset, user):
-        queryset = cls.filter_queryset(queryset)
+    def get_queryset(cls, queryset, user, **kwargs):
         # GraphQL calls with an info object while Rest calls with the user itself
         if isinstance(user, ResolveInfo):
             user = user.context.user
+        if user.has_perms(LocationConfig.gql_query_health_facilities_perms) and queryset is None:
+            queryset = HealthFacility.objects
+        else:
+            queryset = cls.filter_queryset(queryset)
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
         if settings.ROW_SECURITY:
