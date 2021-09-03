@@ -1,13 +1,13 @@
+import graphene_django_optimizer as gql_optimizer
+from core.schema import OrderedDjangoFilterConnectionField
 from core.schema import signal_mutation_module_validate
 from django.db.models import Q
-from graphene_django.filter import DjangoFilterConnectionField
-from core.schema import OrderedDjangoFilterConnectionField
-from .models import *
 from django.utils.translation import gettext as _
-import graphene_django_optimizer as gql_optimizer
+from graphene_django.filter import DjangoFilterConnectionField
 
-from .gql_queries import *
 from .gql_mutations import *
+from .gql_queries import *
+from .models import *
 
 
 class Query(graphene.ObjectType):
@@ -32,19 +32,22 @@ class Query(graphene.ObjectType):
     )
 
     def resolve_health_facilities(self, info, **kwargs):
-        if not info.context.user.has_perms(LocationConfig.gql_query_health_facilities_perms):
+        show_history = kwargs.get('showHistory', False) and info.context.user.has_perms(
+            LocationConfig.gql_query_health_facilities_perms)
+        # OMT-281 allow anyone to query, limited by the get_queryset
+        # if not info.context.user.has_perms(LocationConfig.gql_query_health_facilities_perms):
+        if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
-        query = HealthFacility.objects
-        show_history = kwargs.get('showHistory', False)
+        query = HealthFacility.get_queryset(None, info.context.user, **kwargs)
         if not show_history:
-            query = query.filter(*filter_validity(**kwargs))
+            query = HealthFacility.filter_queryset(query)
         return gql_optimizer.query(query.all(), info)
 
     def resolve_locations(self, info, **kwargs):
-        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        # OMT-281 allow querying to anyone, with limitations in the get_queryset
+        # if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
-        query = Location.objects
-        return gql_optimizer.query(query.all(), info)
 
     def resolve_locations_str(self, info, **kwargs):
         if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
