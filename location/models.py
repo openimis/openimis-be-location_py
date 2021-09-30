@@ -187,14 +187,13 @@ class HealthFacilityCatchment(models.Model):
         db_table = 'tblHFCatchment'
 
 
-class UserDistrict(models.Model):
-    id = models.AutoField(db_column='UserDistrictID', primary_key=True)
-    legacy_id = models.IntegerField(db_column='LegacyID', blank=True, null=True)
-    user = models.ForeignKey(core_models.InteractiveUser, models.DO_NOTHING, db_column='UserID')
-    location = models.ForeignKey(Location, models.DO_NOTHING, db_column='LocationId')
-    validity_from = fields.DateTimeField(db_column='ValidityFrom')
-    validity_to = fields.DateTimeField(db_column='ValidityTo', blank=True, null=True)
-    audit_user_id = models.IntegerField(db_column='AuditUserID')
+class UserDistrict(core_models.VersionedModel):
+    id = models.AutoField(db_column="UserDistrictID", primary_key=True)
+    user = models.ForeignKey(
+        core_models.InteractiveUser, models.DO_NOTHING, db_column="UserID"
+    )
+    location = models.ForeignKey(Location, models.DO_NOTHING, db_column="LocationId")
+    audit_user_id = models.IntegerField(db_column="AuditUserID")
 
     class Meta:
         managed = False
@@ -243,16 +242,21 @@ class UserDistrict(models.Model):
         return queryset
 
 
-class OfficerVillage(models.Model):
-    id = models.AutoField(db_column='OfficerVillageId', primary_key=True)
-    legacy_id = models.IntegerField(db_column='LegacyID', blank=True, null=True)
-    officer = models.ForeignKey(core_models.Officer, models.CASCADE, db_column='OfficerId',
-                                related_name="officer_villages")
-    location = models.ForeignKey(Location, models.CASCADE, db_column='LocationId',
-                                 related_name="officer_villages")
-    validity_from = fields.DateTimeField(db_column='ValidityFrom')
-    validity_to = fields.DateTimeField(db_column='ValidityTo', blank=True, null=True)
-    audit_user_id = models.IntegerField(db_column='AuditUserID')
+class OfficerVillage(core_models.VersionedModel):
+    id = models.AutoField(db_column="OfficerVillageId", primary_key=True)
+    officer = models.ForeignKey(
+        core_models.Officer,
+        models.CASCADE,
+        db_column="OfficerId",
+        related_name="officer_villages",
+    )
+    location = models.ForeignKey(
+        Location,
+        models.CASCADE,
+        db_column="LocationId",
+        related_name="officer_villages",
+    )
+    audit_user_id = models.IntegerField(db_column="AuditUserID")
 
     class Meta:
         managed = False
