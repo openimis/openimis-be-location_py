@@ -47,17 +47,39 @@ class Location(core_models.VersionedModel):
 
         # OMT-280: if you create a new region and your user has district limitations, you won't find what you
         # just created. So we'll consider that if you were allowed to create it, you are also allowed to retrieve it.
-        if settings.ROW_SECURITY and not user.has_perms(LocationConfig.gql_mutation_create_locations_perms):
-            dists = UserDistrict.get_user_districts(user._u)
-            regs = set([d.location.parent.id for d in dists])
-            dists = set([d.location.id for d in dists])
-            filters = []
-            prev = "id"
-            for i, tpe in enumerate(LocationConfig.location_types):
-                loc_ids = dists if i else regs
-                filters += [models.Q(type__exact=tpe) & models.Q(**{"%s__in" % prev: loc_ids})]
-                prev = "parent__" + prev if i > 1 else "parent_" + prev if i else prev
-            return queryset.filter(reduce((lambda x, y: x | y), filters))
+        if settings.ROW_SECURITY and not user.has_perms(
+            LocationConfig.gql_mutation_create_locations_perms
+        ):
+            hf = HealthFacility.objects.filter(validity_to__isnull=True).get(
+                id=user.health_facility_id
+            )
+            ids = [
+                loc.id
+                for loc in Location.objects.raw(
+                    """
+            WITH CTE AS (
+                SELECT
+                    LocationId,
+                    ParentLocationId
+                FROM
+                    tblLocations
+                WHERE LocationId = %s
+                UNION ALL
+                SELECT
+                    loc.LocationId,
+                    loc.ParentLocationId
+                FROM
+                    tblLocations loc
+                    INNER JOIN CTE c
+                        ON c.LocationId = loc.ParentLocationId
+            )
+            SELECT * FROM CTE;
+            """,
+                    [hf.location.id],
+                )
+            ]
+            return queryset.filter(id__in=ids)
+
         return queryset
 
     class Meta:
