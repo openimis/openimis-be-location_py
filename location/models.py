@@ -1,11 +1,15 @@
 from functools import reduce
 import uuid
+
 from core import fields, filter_validity
 from django.conf import settings
 from django.db import models
 from core import models as core_models
 from graphql import ResolveInfo
 from .apps import LocationConfig
+import logging
+
+logger = logging.getLogger(__file__)
 
 
 class Location(core_models.VersionedModel):
@@ -208,7 +212,10 @@ class UserDistrict(models.Model):
         :return: UserDistrict *objects*
         """
         if not isinstance(user, core_models.InteractiveUser):
-            return []
+            if isinstance(user, core_models.TechnicalUser):
+                logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
+                               "We'll return an empty list, but it should be handled before reaching here.")
+            return UserDistrict.objects.none()
         return UserDistrict.objects \
             .select_related('location') \
             .select_related('location__parent') \
