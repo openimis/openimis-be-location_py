@@ -208,14 +208,16 @@ class UserDistrict(core_models.VersionedModel):
         """
         if not isinstance(user, core_models.InteractiveUser):
             return []
-        return UserDistrict.objects \
-            .select_related('location') \
-            .select_related('location__parent') \
-            .filter(user=user) \
-            .filter(*filter_validity()) \
-            .order_by('location__parent_code') \
-            .order_by('location__code') \
+        return (
+            UserDistrict.objects.select_related("location")
+            .only("location__id", "location__parent__id")
+            .select_related("location__parent")
+            .filter(user=user)
+            .filter(*filter_validity())
+            .order_by("location__parent_code")
+            .order_by("location__code")
             .exclude(location__parent__isnull=True)
+        )
 
     @classmethod
     def get_user_locations(cls, user):
