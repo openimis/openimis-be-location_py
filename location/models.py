@@ -1,11 +1,16 @@
 from functools import reduce
 import uuid
+
 from core import fields, filter_validity
 from django.conf import settings
 from django.db import models
 from core import models as core_models
 from graphql import ResolveInfo
 from .apps import LocationConfig
+import logging
+
+logger = logging.getLogger(__file__)
+
 
 class Location(core_models.VersionedModel):
     id = models.AutoField(db_column='LocationId', primary_key=True)
@@ -43,7 +48,10 @@ class Location(core_models.VersionedModel):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
-        if settings.ROW_SECURITY:
+
+        # OMT-280: if you create a new region and your user has district limitations, you won't find what you
+        # just created. So we'll consider that if you were allowed to create it, you are also allowed to retrieve it.
+        if settings.ROW_SECURITY and not user.has_perms(LocationConfig.gql_mutation_create_locations_perms):
             dists = UserDistrict.get_user_districts(user._u)
             regs = set([d.location.parent.id for d in dists])
             dists = set([d.location.id for d in dists])
@@ -127,11 +135,14 @@ class HealthFacility(core_models.VersionedModel):
         return self.code + " " + self.name
 
     @classmethod
-    def get_queryset(cls, queryset, user):
-        queryset = cls.filter_queryset(queryset)
+    def get_queryset(cls, queryset, user, **kwargs):
         # GraphQL calls with an info object while Rest calls with the user itself
         if isinstance(user, ResolveInfo):
             user = user.context.user
+        if user.has_perms(LocationConfig.gql_query_health_facilities_perms) and queryset is None:
+            queryset = HealthFacility.objects
+        else:
+            queryset = cls.filter_queryset(queryset)
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
         if settings.ROW_SECURITY:
@@ -180,18 +191,13 @@ class HealthFacilityCatchment(models.Model):
         db_table = 'tblHFCatchment'
 
 
-class UserDistrict(models.Model):
-    id = models.AutoField(db_column='UserDistrictID', primary_key=True)
-    legacy_id = models.IntegerField(
-        db_column='LegacyID', blank=True, null=True)
+class UserDistrict(core_models.VersionedModel):
+    id = models.AutoField(db_column="UserDistrictID", primary_key=True)
     user = models.ForeignKey(
-        core_models.InteractiveUser, models.DO_NOTHING, db_column='UserID')
-    location = models.ForeignKey(
-        Location, models.DO_NOTHING, db_column='LocationId')
-    validity_from = fields.DateTimeField(db_column='ValidityFrom')
-    validity_to = fields.DateTimeField(
-        db_column='ValidityTo', blank=True, null=True)
-    audit_user_id = models.IntegerField(db_column='AuditUserID')
+        core_models.InteractiveUser, models.DO_NOTHING, db_column="UserID"
+    )
+    location = models.ForeignKey(Location, models.DO_NOTHING, db_column="LocationId")
+    audit_user_id = models.IntegerField(db_column="AuditUserID")
 
     class Meta:
         managed = False
@@ -199,17 +205,81 @@ class UserDistrict(models.Model):
 
     @classmethod
     def get_user_districts(cls, user):
+        """
+        Retrieve the list of UserDistricts for a user, the locations are prefetched on two levels.
+        :param user: InteractiveUser to filter on
+        :return: UserDistrict *objects*
+        """
         if not isinstance(user, core_models.InteractiveUser):
-            return []
-        return UserDistrict.objects \
-            .select_related('location') \
-            .select_related('location__parent') \
-            .filter(user=user) \
+            if isinstance(user, core_models.TechnicalUser):
+                logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
+                               "We'll return an empty list, but it should be handled before reaching here.")
+            return UserDistrict.objects.none()
+        return (
+            UserDistrict.objects.select_related("location")
+            .only("location__id", "location__parent__id")
+            .select_related("location__parent")
+            .filter(user=user)
+            .filter(*filter_validity())
+            .order_by("location__parent_code")
+            .order_by("location__code")
+            .exclude(location__parent__isnull=True)
+        )
+
+    @classmethod
+    def get_user_locations(cls, user):
+        """
+        Retrieve the list of Locations in the UserDistricts of a certain user.
+        :param user: InteractiveUser to filter on
+        :return: Location objects to filter on.
+        """
+        if not core_models.InteractiveUser.is_interactive_user(user):
+            return Location.objects.none()
+        return Location.objects \
             .filter(*filter_validity()) \
-            .order_by('location__parent_code') \
-            .order_by('location__code') \
-            .exclude(location__parent__isnull=True) \
-            .all()
+            .filter(parent__parent__userdistrict__user=user.i_user) \
+            .order_by("code")
+
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            pass
+        return queryset
+
+
+class OfficerVillage(core_models.VersionedModel):
+    id = models.AutoField(db_column="OfficerVillageId", primary_key=True)
+    officer = models.ForeignKey(
+        core_models.Officer,
+        models.CASCADE,
+        db_column="OfficerId",
+        related_name="officer_villages",
+    )
+    location = models.ForeignKey(
+        Location,
+        models.CASCADE,
+        db_column="LocationId",
+        related_name="officer_villages",
+    )
+    audit_user_id = models.IntegerField(db_column="AuditUserID")
+
+    class Meta:
+        managed = False
+        db_table = 'tblOfficerVillages'
+
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            pass
+        return queryset
 
 
 class LocationMutation(core_models.UUIDModel):
