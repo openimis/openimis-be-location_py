@@ -13,6 +13,20 @@ DEFAULT_CFG = {
     "gql_mutation_create_health_facilities_perms": ["121102"],
     "gql_mutation_edit_health_facilities_perms": ["121103"],
     "gql_mutation_delete_health_facilities_perms": ["121104"],
+    "health_facility_level": [
+        {
+            "code": "D",
+            "display": "Dispensary",
+        },
+        {
+            "code": "C",
+            "display": "Health Centre",
+        },
+        {
+            "code": "H",
+            "display": "Hospital",
+        },
+    ]
 }
 
 
@@ -29,6 +43,8 @@ class LocationConfig(AppConfig):
     gql_mutation_create_health_facilities_perms = []
     gql_mutation_edit_health_facilities_perms = []
     gql_mutation_delete_health_facilities_perms = []
+
+    health_facility_level = [{"code": "1", "display": "jeden"}]
 
     def _configure_permissions(self, cfg):
         LocationConfig.location_types = cfg[
@@ -59,7 +75,11 @@ class LocationConfig(AppConfig):
             "gql_query_health_facilities_perms"
         ]
 
+    def _configure_coding(self, cfg):
+        LocationConfig.health_facility_level = cfg["health_facility_level"]
+
     def ready(self):
         from core.models import ModuleConfiguration
         cfg = ModuleConfiguration.get_or_default(MODULE_NAME, DEFAULT_CFG)
         self._configure_permissions(cfg)
+        self._configure_coding(cfg)
