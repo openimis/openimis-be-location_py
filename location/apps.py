@@ -44,7 +44,7 @@ class LocationConfig(AppConfig):
     gql_mutation_edit_health_facilities_perms = []
     gql_mutation_delete_health_facilities_perms = []
 
-    health_facility_level = [{"code": "1", "display": "jeden"}]
+    health_facility_level = []
 
     def _configure_permissions(self, cfg):
         LocationConfig.location_types = cfg[
