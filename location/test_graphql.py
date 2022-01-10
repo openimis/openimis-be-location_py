@@ -58,7 +58,7 @@ class LocationGQLTestCase(GraphQLTestCase):
                 }
             }
             ''' % (code,),
-            headers={"HTTP_AUTHORIZATION": f"JWT {self.admin_token}"},
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
         self.assertEquals(response.status_code, status.HTTP_200_OK)
@@ -81,7 +81,7 @@ class LocationGQLTestCase(GraphQLTestCase):
                 }
             }
             ''',
-            headers={"HTTP_AUTHORIZATION": f"JWT {self.admin_token}"},
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
         self.assertEquals(response.status_code, status.HTTP_200_OK)
@@ -109,7 +109,7 @@ class LocationGQLTestCase(GraphQLTestCase):
                 }
             }
             ''' % (arg,),
-            headers={"HTTP_AUTHORIZATION": f"JWT {token if token else self.admin_token}"},
+            headers={"HTTP_AUTHORIZATION": f"Bearer {token if token else self.admin_token}"},
         )
 
         self.assertEquals(response.status_code, status.HTTP_200_OK)
@@ -146,7 +146,7 @@ class LocationGQLTestCase(GraphQLTestCase):
     def test_no_right_locations_query(self):
         """ Query with a valid token but not the right to perform this operation """
         response = self.query(' query { medicalLocations { edges { node { id name } } } } ',
-                              headers={"HTTP_AUTHORIZATION": f"JWT {self.noright_token}"})
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.noright_token}"})
 
         self.assertResponseHasErrors(response)
 
@@ -176,7 +176,7 @@ class LocationGQLTestCase(GraphQLTestCase):
                 }
             }
             ''',
-            headers={"HTTP_AUTHORIZATION": f"JWT {self.admin_token}"},
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
         self.assertEquals(response.status_code, status.HTTP_200_OK)
@@ -207,7 +207,7 @@ class LocationGQLTestCase(GraphQLTestCase):
               }
             }
             ''',
-            headers={"HTTP_AUTHORIZATION": f"JWT {self.admin_token}"},
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
         self.assertEquals(response.status_code, status.HTTP_200_OK)
@@ -243,7 +243,7 @@ class LocationGQLTestCase(GraphQLTestCase):
               }
             }
             ''' % self.test_location_delete.uuid,
-            headers={"HTTP_AUTHORIZATION": f"JWT {self.admin_token}"},
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
         self.assertEquals(response.status_code, status.HTTP_200_OK)
