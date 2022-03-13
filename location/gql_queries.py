@@ -9,6 +9,11 @@ from location.models import HealthFacilityLegalForm, Location, HealthFacilitySub
 class LocationGQLType(DjangoObjectType):
     client_mutation_id = graphene.String()
 
+    def resolve_parent(self, info):
+        if "location_loader" in info.context.dataloaders and self.parent_id:
+            return info.context.dataloaders["location_loader"].load(self.parent_id)
+        return self.parent
+
     class Meta:
         model = Location
         interfaces = (graphene.relay.Node,)
@@ -67,6 +72,10 @@ class HealthFacilityGQLType(DjangoObjectType):
             **prefix_filterset("location__", LocationGQLType._meta.filter_fields)
         }
         connection_class = ExtendedConnection
+
+    def resolve_location(self, info):
+        if "location_loader" in info.context.dataloaders:
+            return info.context.dataloaders["location_loader"].load(self.location_id)
 
     def resolve_catchments(self, info):
         return self.catchments.filter(validity_to__isnull=True)

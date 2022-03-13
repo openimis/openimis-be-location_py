@@ -80,6 +80,13 @@ class LocationConfig(AppConfig):
 
     def ready(self):
         from core.models import ModuleConfiguration
+
         cfg = ModuleConfiguration.get_or_default(MODULE_NAME, DEFAULT_CFG)
         self._configure_permissions(cfg)
         self._configure_coding(cfg)
+
+    def set_dataloaders(self, dataloaders):
+        from .dataloaders import LocationLoader, HealthFacilityLoader
+
+        dataloaders["location_loader"] = LocationLoader()
+        dataloaders["health_facility_loader"] = HealthFacilityLoader()
