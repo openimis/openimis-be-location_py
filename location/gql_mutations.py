@@ -318,6 +318,7 @@ def update_or_create_health_facility(data, user):
         hf = HealthFacility.objects.create(**data)
     process_catchments(user, catchments, prev_hf_id, hf.id, hf.catchments)
     hf.save()
+    return hf
 
 
 class CreateHealthFacilityMutation(OpenIMISMutation):
