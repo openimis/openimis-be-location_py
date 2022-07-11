@@ -1,3 +1,4 @@
+import datetime
 import json
 
 from django.contrib.auth.models import AnonymousUser
@@ -5,7 +6,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 
 from core.signals import register_service_signal
 from location.apps import LocationConfig
-from location.models import Location, HealthFacility, HealthFacilityCatchment
+from location.models import Location, HealthFacility, HealthFacilityCatchment, UserDistrict
 
 
 def check_authentication(function):
@@ -60,6 +61,7 @@ class LocationService:
         if parent_uuid:
             location.parent = Location.objects.get(uuid=parent_uuid)
         location.save()
+        self._ensure_user_belongs_to_district(location)
 
     @staticmethod
     def _reset_location_before_update(location):
@@ -67,6 +69,14 @@ class LocationService:
         location.female_population = None
         location.other_population = None
         location.families = None
+
+    def _ensure_user_belongs_to_district(self, location: Location):
+        if location.type == 'D':
+            UserDistrict.objects.get_or_create(
+                user=self.user.i_user,
+                location=location,
+                audit_user_id=self.user.id_for_audit,
+            )
 
 
 class HealthFacilityService:
