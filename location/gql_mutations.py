@@ -2,7 +2,7 @@ import graphene
 from .apps import LocationConfig
 from core import assert_string_length, filter_validity
 from core.schema import OpenIMISMutation
-from .models import Location, HealthFacility
+from .models import Location, HealthFacility, UserDistrict
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils.translation import gettext as _
@@ -136,11 +136,23 @@ class DeleteLocationMutation(OpenIMISMutation):
 
             location.validity_to = now
             location.save()
+            if location.type == 'D':
+                cls.__delete_user_districts(location, now)
             return None
         except Exception as exc:
             return [{
                 'message': _("location.mutation.failed_to_delete_location") % {'code': data['code']},
                 'detail': str(exc)}]
+
+    @classmethod
+    def __delete_user_districts(cls, location: Location, location_delete_date=None):
+        if location_delete_date is None:
+            from core import datetime
+            location_delete_date = datetime.datetime.now()
+
+        UserDistrict.objects\
+            .filter(location=location, validity_to__isnull=True)\
+            .update(validity_to=location_delete_date)
 
 
 def tree_reset_types(parent, location, new_level):
