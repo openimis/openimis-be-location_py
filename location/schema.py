@@ -1,4 +1,6 @@
 import graphene_django_optimizer as gql_optimizer
+
+from core.models import Officer
 from core.schema import OrderedDjangoFilterConnectionField
 from core.schema import signal_mutation_module_validate
 from django.db.models import Q
@@ -56,7 +58,14 @@ class Query(graphene.ObjectType):
         str = kwargs.get('str')
         if str is not None:
             filters += [Q(code__icontains=str) | Q(name__icontains=str)]
-        return Location.objects.filter(*filters)
+
+        locations = Location.objects.filter(*filters)
+        #return locations
+        if info.context.user.is_officer:
+            officer = Officer.objects\
+                .filter(code=info.context.user.username, has_login=True, validity_to__isnull=True).get()
+            locations = locations.filter(uuid__in=officer.officer_allowed_locations)
+        return locations
 
     def resolve_health_facilities_str(self, info, **kwargs):
         if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
