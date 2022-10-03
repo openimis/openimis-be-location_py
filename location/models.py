@@ -12,7 +12,69 @@ import logging
 logger = logging.getLogger(__file__)
 
 
+class LocationManager(models.Manager):
+    def parents(self, location_id):
+        parents = Location.objects.raw(
+            """
+            WITH CTE_PARENTS AS (
+            SELECT
+                LocationId,
+                LocationType,
+                ParentLocationId
+            FROM
+                tblLocations
+            WHERE LocationId = %s
+            UNION ALL
+
+            SELECT
+                parent.LocationId,
+                parent.LocationType,
+                parent.ParentLocationId
+            FROM
+                tblLocations parent
+                INNER JOIN CTE_PARENTS leaf
+                    ON parent.LocationId = leaf.ParentLocationId
+            )
+            SELECT * FROM CTE_PARENTS;
+        """,
+            (location_id,),
+        )
+        return self.filter(id__in=[x.id for x in parents])
+
+    def children(self, location_id):
+        children = Location.objects.raw(
+            """
+            WITH CTE_CHILDREN AS (
+            SELECT
+                LocationId,
+                LocationType,
+                ParentLocationId,
+                0 as Level
+            FROM
+                tblLocations
+            WHERE ParentLocationId = %s
+            UNION ALL
+
+            SELECT
+                child.LocationId,
+                child.LocationType,
+                child.ParentLocationId,
+                parent.Level + 1
+            FROM
+                tblLocations child
+                INNER JOIN CTE_CHILDREN parent
+                    ON child.ParentLocationId = parent.LocationId
+            )
+            SELECT * FROM CTE_CHILDREN;
+        """,
+            (location_id,),
+        )
+        return self.filter(id__in=[x.id for x in children])
+
+
 class Location(core_models.VersionedModel):
+    objects = LocationManager()
+
     id = models.AutoField(db_column='LocationId', primary_key=True)
     uuid = models.CharField(db_column='LocationUUID',
                             max_length=36, default=uuid.uuid4, unique=True)
@@ -24,7 +86,6 @@ class Location(core_models.VersionedModel):
                                db_column='ParentLocationId',
                                blank=True, null=True, related_name='children')
     type = models.CharField(db_column='LocationType', max_length=1)
-
     male_population = models.IntegerField(
         db_column='MalePopulation', blank=True, null=True)
     female_population = models.IntegerField(
