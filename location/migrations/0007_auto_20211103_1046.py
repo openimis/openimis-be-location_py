@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
         (
             [ParentLocationId] ASC,
             [LegacyID] ASC
-        )""" if "sql_server" in settings.DB_ENGINE else """
+        )""" if settings.MSSQL else """
         CREATE INDEX "ix_tblLocation_parentLocationId" ON "tblLocations"
         (
             "ParentLocationId" ASC,
