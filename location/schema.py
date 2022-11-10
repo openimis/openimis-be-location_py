@@ -31,6 +31,7 @@ class Query(graphene.ObjectType):
         str=graphene.String(),
         region_uuid=graphene.String(),
         district_uuid=graphene.String(),
+        districts_uuids=graphene.List(of_type=graphene.String),
     )
 
     def resolve_health_facilities(self, info, **kwargs):
@@ -75,8 +76,12 @@ class Query(graphene.ObjectType):
         if str is not None:
             filters += [Q(code__icontains=str) | Q(name__icontains=str)]
         district_uuid = kwargs.get('district_uuid')
+        district_uuids = kwargs.get('districts_uuids')
         if district_uuid is not None:
             filters += [Q(location__uuid=district_uuid)]
+        if district_uuids is not None:
+            filters += [Q(location__uuid__in=district_uuids)]
+
         region_uuid = kwargs.get('region_uuid')
         if region_uuid is not None:
             filters += [Q(location__parent__uuid=region_uuid)]
