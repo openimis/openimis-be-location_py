@@ -271,6 +271,12 @@ class UserDistrict(core_models.VersionedModel):
         :param user: InteractiveUser to filter on
         :return: UserDistrict *objects*
         """
+        if user.is_superuser is True:
+            return (
+                UserDistrict.objects
+                .filter(*filter_validity())
+                .filter(location_type='D').all()
+            )
         if not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
                 logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
