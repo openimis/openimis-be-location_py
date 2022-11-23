@@ -360,7 +360,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
     def test_mutation_create_health_facility_error_mandatory_fields(self):
         """
         This method tests that a health facility cannot be created through the GraphQL API
-        if all its mandatory fields are not present.
+        if any of its mandatory fields is not present.
         In this case, the `legal_form` field is missing.
         """
         client_mutation_id = "tsthfgql2"
