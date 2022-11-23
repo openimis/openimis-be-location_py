@@ -99,8 +99,6 @@ class HealthFacilityService:
             self._reset_health_facility_before_update(hf)
             [setattr(hf, key, data[key]) for key in data]
         else:
-            # UI don't foresee a field for offline > set via API (and mobile 'world' ?
-            data['offline'] = False
             hf = HealthFacility.objects.create(**data)
         self._process_catchments(catchments, prev_hf_id, hf.id, hf.catchments)
         hf.save()

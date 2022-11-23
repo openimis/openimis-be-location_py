@@ -188,7 +188,7 @@ class HealthFacility(core_models.VersionedModel):
                                            related_name="health_facilities")
     items_pricelist = models.ForeignKey('medical_pricelist.ItemsPricelist', models.DO_NOTHING, db_column='PLItemID',
                                         blank=True, null=True, related_name="health_facilities")
-    offline = models.BooleanField(db_column='OffLine')
+    offline = models.BooleanField(db_column='OffLine', default=False)
     # row_id = models.BinaryField(db_column='RowID', blank=True, null=True)
     audit_user_id = models.IntegerField(db_column='AuditUserID')
 
@@ -208,9 +208,10 @@ class HealthFacility(core_models.VersionedModel):
             return queryset.filter(id=-1)
         if settings.ROW_SECURITY:
             dist = UserDistrict.get_user_districts(user._u)
-            return queryset.filter(
-                location_id__in=[l.location_id for l in dist]
-            )
+            if dist:
+                return queryset.filter(
+                    location_id__in=[l.location_id for l in dist]
+                )
         return queryset
 
     class Meta:
