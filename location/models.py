@@ -15,25 +15,25 @@ logger = logging.getLogger(__file__)
 class LocationManager(models.Manager):
     def parents(self, location_id):
         parents = Location.objects.raw(
-            """
-            WITH CTE_PARENTS AS (
+            f"""
+            WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
             SELECT
-                LocationId,
-                LocationType,
-                ParentLocationId
+                "LocationId",
+                "LocationType",
+                "ParentLocationId"
             FROM
-                tblLocations
-            WHERE LocationId = %s
+                "tblLocations"
+            WHERE "LocationId" = %s
             UNION ALL
 
             SELECT
-                parent.LocationId,
-                parent.LocationType,
-                parent.ParentLocationId
+                parent."LocationId",
+                parent."LocationType",
+                parent."ParentLocationId"
             FROM
-                tblLocations parent
+                "tblLocations" parent
                 INNER JOIN CTE_PARENTS leaf
-                    ON parent.LocationId = leaf.ParentLocationId
+                    ON parent."LocationId" = leaf."ParentLocationId"
             )
             SELECT * FROM CTE_PARENTS;
         """,
@@ -43,30 +43,30 @@ class LocationManager(models.Manager):
 
     def children(self, location_id):
         children = Location.objects.raw(
-            """
-            WITH CTE_CHILDREN AS (
-            SELECT
-                LocationId,
-                LocationType,
-                ParentLocationId,
-                0 as Level
-            FROM
-                tblLocations
-            WHERE ParentLocationId = %s
-            UNION ALL
+            f"""
+                WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_CHILDREN AS (
+                SELECT
+                    "LocationId",
+                    "LocationType",
+                    "ParentLocationId",
+                    0 as "Level"
+                FROM
+                    "tblLocations"
+                WHERE "ParentLocationId" = %s
+                UNION ALL
 
-            SELECT
-                child.LocationId,
-                child.LocationType,
-                child.ParentLocationId,
-                parent.Level + 1
-            FROM
-                tblLocations child
-                INNER JOIN CTE_CHILDREN parent
-                    ON child.ParentLocationId = parent.LocationId
-            )
-            SELECT * FROM CTE_CHILDREN;
-        """,
+                SELECT
+                    child."LocationId",
+                    child."LocationType",
+                    child."ParentLocationId",
+                    parent."Level" + 1
+                FROM
+                    "tblLocations" child
+                    INNER JOIN CTE_CHILDREN parent
+                        ON child."ParentLocationId" = parent."LocationId"
+                )
+                SELECT * FROM CTE_CHILDREN;
+            """,
             (location_id,),
         )
         return self.filter(id__in=[x.id for x in children])
