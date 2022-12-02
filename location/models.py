@@ -276,7 +276,7 @@ class UserDistrict(core_models.VersionedModel):
             return (
                 UserDistrict.objects
                 .filter(*filter_validity())
-                .filter(location_type='D').all()
+                .filter(location__type='D').all()
             )
         if not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
