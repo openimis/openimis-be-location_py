@@ -23,8 +23,8 @@ class LocationGQLType(DjangoObjectType):
             "code": ["exact", "istartswith", "icontains", "iexact"],
             "name": ["exact", "istartswith", "icontains", "iexact"],
             "type": ["exact"],
-            "parent__uuid": ["exact"],  # can't import itself!
-            "parent__id": ["exact"],  # can't import itself!
+            "parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__id": ["exact", "in"],  # can't import itself!
         }
 
     def resolve_client_mutation_id(self, info):
