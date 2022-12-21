@@ -7,6 +7,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils.translation import gettext as _
 from graphene import InputObjectType
+import copy
 
 from .services import LocationService, HealthFacilityService
 
@@ -102,9 +103,10 @@ def tree_delete(parents, now):
     if parents:
         children = Location.objects \
             .filter(parent__in=parents) \
-            .filter(*filter_validity())
+            # .filter(*filter_validity())
+        org_children = copy.copy(children)
         children.update(validity_to=now)
-        tree_delete(children.all(), now)
+        tree_delete(org_children, now)
 
 
 class DeleteLocationMutation(OpenIMISMutation):
