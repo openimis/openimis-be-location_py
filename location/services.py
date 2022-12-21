@@ -69,7 +69,7 @@ class LocationService:
         else:
             error = self.validate_data(**data)
             if error:
-                raise Exception(error)
+                raise ValueError(error)
             else:
                 location = Location.objects.create(**data)
 
