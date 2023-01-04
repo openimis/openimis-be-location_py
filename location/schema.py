@@ -10,6 +10,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 from .gql_mutations import *
 from .gql_queries import *
 from .models import *
+from .services import validate_location_code
 
 
 class Query(graphene.ObjectType):
@@ -33,6 +34,11 @@ class Query(graphene.ObjectType):
         district_uuid=graphene.String(),
         districts_uuids=graphene.List(of_type=graphene.String),
     )
+    validate_location_code = graphene.Field(
+        graphene.Boolean,
+        location_code=graphene.String(required=True),
+        description="Checks that the specified location code is unique."
+    )
 
     def resolve_health_facilities(self, info, **kwargs):
         show_history = kwargs.get('showHistory', False) and info.context.user.has_perms(
@@ -45,6 +51,13 @@ class Query(graphene.ObjectType):
         if not show_history:
             query = HealthFacility.filter_queryset(query)
         return gql_optimizer.query(query.all(), info)
+
+    def resolve_validate_location_code(self, info, **kwargs):
+        errors = validate_location_code(kwargs['location_code'])
+        if errors:
+            return False
+        else:
+            return True
 
     def resolve_locations(self, info, **kwargs):
         # OMT-281 allow querying to anyone, with limitations in the get_queryset

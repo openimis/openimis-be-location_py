@@ -79,6 +79,13 @@ class LocationService:
             )
 
 
+def validate_location_code(location_code, is_new_location=True):
+    if is_new_location:
+        if Location.objects.filter(code=location_code, validity_to=None).exists():
+            return [{"message": "Location with this code already exists." % location_code}]
+    return []
+
+
 class HealthFacilityService:
     def __init__(self, user):
         self.user = user
