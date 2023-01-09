@@ -46,6 +46,16 @@ class LocationService:
     def __init__(self, user):
         self.user = user
 
+    def check_unique_code(self, code):
+        if Location.objects.filter(code=code, validity_to__isnull=True).exists():
+            return [{"message": "Location code %s already exists" % code}]
+
+    def validate_data(self, **data):
+        error = None
+        error = self.check_unique_code(data["code"])
+
+        return error
+
     @register_service_signal('location_service.update_or_create')
     def update_or_create(self, data):
         location_uuid = data.pop('uuid') if 'uuid' in data else None
@@ -57,7 +67,12 @@ class LocationService:
             self._reset_location_before_update(location)
             [setattr(location, key, data[key]) for key in data]
         else:
-            location = Location.objects.create(**data)
+            error = self.validate_data(**data)
+            if error:
+                raise ValueError(error)
+            else:
+                location = Location.objects.create(**data)
+
         if parent_uuid:
             location.parent = Location.objects.get(uuid=parent_uuid)
         location.save()
