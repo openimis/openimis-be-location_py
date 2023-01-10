@@ -46,9 +46,11 @@ class LocationService:
     def __init__(self, user):
         self.user = user
 
-    def check_unique_code(self, code):
+    @staticmethod
+    def check_unique_code(code):
         if Location.objects.filter(code=code, validity_to__isnull=True).exists():
             return [{"message": "Location code %s already exists" % code}]
+        return []
 
     def validate_data(self, **data):
         error = None
@@ -92,13 +94,6 @@ class LocationService:
                 location=location,
                 audit_user_id=self.user.id_for_audit,
             )
-
-
-def validate_location_code(location_code, is_new_location=True):
-    if is_new_location:
-        if Location.objects.filter(code=location_code, validity_to=None).exists():
-            return [{"message": "Location with this code already exists." % location_code}]
-    return []
 
 
 class HealthFacilityService:

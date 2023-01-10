@@ -10,7 +10,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 from .gql_mutations import *
 from .gql_queries import *
 from .models import *
-from .services import validate_location_code
+from .services import LocationService
 
 
 class Query(graphene.ObjectType):
@@ -53,11 +53,8 @@ class Query(graphene.ObjectType):
         return gql_optimizer.query(query.all(), info)
 
     def resolve_validate_location_code(self, info, **kwargs):
-        errors = validate_location_code(kwargs['location_code'])
-        if errors:
-            return False
-        else:
-            return True
+        errors = LocationService.check_unique_code(code=kwargs['location_code'])
+        return False if errors else True
 
     def resolve_locations(self, info, **kwargs):
         # OMT-281 allow querying to anyone, with limitations in the get_queryset
