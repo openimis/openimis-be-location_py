@@ -46,9 +46,11 @@ class LocationService:
     def __init__(self, user):
         self.user = user
 
-    def check_unique_code(self, code):
+    @staticmethod
+    def check_unique_code(code):
         if Location.objects.filter(code=code, validity_to__isnull=True).exists():
             return [{"message": "Location code %s already exists" % code}]
+        return []
 
     def validate_data(self, **data):
         error = None
