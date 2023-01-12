@@ -100,6 +100,12 @@ class HealthFacilityService:
     def __init__(self, user):
         self.user = user
 
+    @staticmethod
+    def check_unique_code(code):
+        if HealthFacility.objects.filter(code=code, validity_to__isnull=True).exists():
+            return [{"message": "Health facility code %s already exists" % code}]
+        return []
+
     @register_service_signal('health_facility_service.update_or_create')
     def update_or_create(self, data):
         hf_uuid = data.pop('uuid') if 'uuid' in data else None

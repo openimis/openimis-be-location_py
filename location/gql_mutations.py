@@ -263,6 +263,9 @@ class CreateHealthFacilityMutation(OpenIMISMutation):
     @classmethod
     def async_mutate(cls, user, **data):
         try:
+            if HealthFacilityService.check_unique_code(data['code']):
+                raise ValidationError(
+                    _("mutation.hf_code_duplicated"))
             if type(user) is AnonymousUser or not user.id:
                 raise ValidationError(
                     _("mutation.authentication_required"))
@@ -290,6 +293,11 @@ class UpdateHealthFacilityMutation(OpenIMISMutation):
     @classmethod
     def async_mutate(cls, user, **data):
         try:
+            current_HF = HealthFacility.objects.get(uuid=data['uuid'])
+            if current_HF.code != data['code']:
+                if HealthFacilityService.check_unique_code(data['code']):
+                    raise ValidationError(
+                        _("mutation.hf_code_duplicated"))
             if type(user) is AnonymousUser or not user.id:
                 raise ValidationError(
                     _("mutation.authentication_required"))
