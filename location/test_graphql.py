@@ -294,7 +294,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
                 }}
             }}
         """
-        response = self.query(query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"})
+        response = self.query(query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_dist_token}"})
 
         self.assertEquals(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
@@ -314,7 +314,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         name = "Test HF X"
         legal_form = HealthFacilityLegalForm.objects.filter(code='C').first()
         level = "H"
-        location = create_test_location('V')
+        location = Location.objects.filter(code='R1D1', validity_to__isnull=True).first()  # create_test_location('V')
         care_type = "B"
         query = f"""
             mutation {{

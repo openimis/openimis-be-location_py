@@ -129,6 +129,7 @@ class Location(core_models.VersionedModel):
     @staticmethod
     def build_user_location_filter_query(user: core_models.InteractiveUser) -> Q:
         user_districts = UserDistrict.get_user_districts(user)
+
         return Q(location__in=Location.objects.filter(uuid__in=user_districts.values_list('location__uuid', flat=True))) | Q(
             location__in=Location.objects.filter(uuid__in=user_districts.values_list('location__parent__uuid', flat=True))) | Q(
             location__isnull=True
