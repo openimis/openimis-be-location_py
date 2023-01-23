@@ -263,6 +263,9 @@ class CreateHealthFacilityMutation(OpenIMISMutation):
     @classmethod
     def async_mutate(cls, user, **data):
         try:
+            if HealthFacilityService.check_unique_code(data.get('code')):
+                raise ValidationError(
+                    _("mutation.hf_code_duplicated"))
             if type(user) is AnonymousUser or not user.id:
                 raise ValidationError(
                     _("mutation.authentication_required"))
@@ -295,6 +298,13 @@ class UpdateHealthFacilityMutation(OpenIMISMutation):
                     _("mutation.authentication_required"))
             if not user.has_perms(LocationConfig.gql_mutation_edit_health_facilities_perms):
                 raise PermissionDenied(_("unauthorized"))
+
+            incoming_HF_code = data['code']
+            current_HF = HealthFacility.objects.get(uuid=data['uuid'])
+            if current_HF.code != incoming_HF_code:
+                if HealthFacilityService.check_unique_code(incoming_HF_code):
+                    raise ValidationError(
+                        _("mutation.hf_code_duplicated"))
 
             data['audit_user_id'] = user.id_for_audit
             from core.utils import TimeUtils

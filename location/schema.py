@@ -39,6 +39,11 @@ class Query(graphene.ObjectType):
         location_code=graphene.String(required=True),
         description="Checks that the specified location code is unique."
     )
+    validate_health_facility_code = graphene.Field(
+        graphene.Boolean,
+        health_facility_code=graphene.String(required=True),
+        description="Checks that the specified health facility code is unique."
+    )
 
     def resolve_health_facilities(self, info, **kwargs):
         show_history = kwargs.get('showHistory', False) and info.context.user.has_perms(
@@ -54,6 +59,10 @@ class Query(graphene.ObjectType):
 
     def resolve_validate_location_code(self, info, **kwargs):
         errors = LocationService.check_unique_code(code=kwargs['location_code'])
+        return False if errors else True
+
+    def resolve_validate_health_facility_code(self, info, **kwargs):
+        errors = HealthFacilityService.check_unique_code(code=kwargs['health_facility_code'])
         return False if errors else True
 
     def resolve_locations(self, info, **kwargs):
