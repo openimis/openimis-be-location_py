@@ -55,6 +55,9 @@ class Query(graphene.ObjectType):
         query = HealthFacility.get_queryset(None, info.context.user, **kwargs)
         if not show_history:
             query = HealthFacility.filter_queryset(query)
+
+        query = query.filter(Location.build_user_location_filter_query(info.context.user._u))
+
         return gql_optimizer.query(query.all(), info)
 
     def resolve_validate_location_code(self, info, **kwargs):
