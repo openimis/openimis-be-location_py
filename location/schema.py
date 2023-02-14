@@ -61,10 +61,14 @@ class Query(graphene.ObjectType):
         return gql_optimizer.query(query.all(), info)
 
     def resolve_validate_location_code(self, info, **kwargs):
+        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+            raise PermissionDenied(_("unauthorized"))
         errors = LocationService.check_unique_code(code=kwargs['location_code'])
         return False if errors else True
 
     def resolve_validate_health_facility_code(self, info, **kwargs):
+        if not info.context.user.has_perms(LocationConfig.gql_query_health_facilities_perms):
+            raise PermissionDenied(_("unauthorized"))
         errors = HealthFacilityService.check_unique_code(code=kwargs['health_facility_code'])
         return False if errors else True
 
