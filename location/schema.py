@@ -97,23 +97,25 @@ class Query(graphene.ObjectType):
         return queryset.filter(*filters)
 
     def resolve_health_facilities_str(self, info, **kwargs):
-        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        if not info.context.user.has_perms(
+                LocationConfig.gql_query_locations_perms
+        ):
             raise PermissionDenied(_("unauthorized"))
         filters = [*filter_validity(**kwargs)]
-        str = kwargs.get('str')
-        if str is not None:
-            filters += [Q(code__icontains=str) | Q(name__icontains=str)]
+        search = kwargs.get('str')
         district_uuid = kwargs.get('district_uuid')
         district_uuids = kwargs.get('districts_uuids')
+        region_uuid = kwargs.get('region_uuid')
+        dist = UserDistrict.get_user_districts(info.context.user._u)
+        if search is not None:
+            filters += [Q(code__icontains=search) | Q(name__icontains=search)]
         if district_uuid is not None:
             filters += [Q(location__uuid=district_uuid)]
         if district_uuids is not None:
-            filters += [Q(location__uuid__in=district_uuids)]
-
-        region_uuid = kwargs.get('region_uuid')
+            if None not in district_uuids:
+                filters += [Q(location__uuid__in=district_uuids)]
         if region_uuid is not None:
             filters += [Q(location__parent__uuid=region_uuid)]
-        dist = UserDistrict.get_user_districts(info.context.user._u)
         filters += [Q(location__id__in=[l.location_id for l in dist])]
         return HealthFacility.objects.filter(*filters)
 
