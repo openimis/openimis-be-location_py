@@ -85,11 +85,6 @@ class Query(graphene.ObjectType):
         if str is not None:
             filters += [Q(code__icontains=str) | Q(name__icontains=str)]
 
-        if isinstance(info.context.user, InteractiveUser) and info.context.user.is_officer:
-            officer = Officer.objects\
-                .filter(code=info.context.user.username, has_login=True, validity_to__isnull=True).get()
-            filters += [Q(uuid__in=officer.officer_allowed_locations)]
-
         return queryset.filter(*filters)
 
     def resolve_health_facilities_str(self, info, **kwargs):
