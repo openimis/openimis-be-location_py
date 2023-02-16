@@ -27,6 +27,10 @@ class Query(graphene.ObjectType):
     user_districts = graphene.List(
         UserDistrictGQLType
     )
+    officer_locations = graphene.List(LocationGQLType,
+                                      officer_code=graphene.String(required=True),
+                                      location_type=graphene.String(required=False),
+                                      description="Returns list of locations assigned to a given enrolment officer.")
     health_facilities_str = DjangoFilterConnectionField(
         HealthFacilityGQLType,
         str=graphene.String(),
@@ -122,6 +126,12 @@ class Query(graphene.ObjectType):
             raise NotImplementedError(
                 'Only Interactive Users are registered for districts')
         return [UserDistrictGQLType(d) for d in UserDistrict.get_user_districts(info.context.user._u)]
+
+    def resolve_officer_locations(self, info, **kwargs):
+        current_officer = Officer.objects.get(code=kwargs['officer_code'], validity_to__isnull=True)
+        if 'location_type' in kwargs:
+            return current_officer.officer_allowed_locations.filter(type=kwargs['location_type'])
+        return current_officer.officer_allowed_locations
 
 
 class Mutation(graphene.ObjectType):
