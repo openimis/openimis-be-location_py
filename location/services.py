@@ -2,7 +2,9 @@ import datetime
 import json
 
 from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import PermissionDenied
 from django.core.serializers.json import DjangoJSONEncoder
+from django.utils.translation import gettext as _
 
 from core.signals import register_service_signal
 from location.apps import LocationConfig
@@ -64,6 +66,11 @@ class LocationService:
         parent_uuid = data.pop('parent_uuid') if 'parent_uuid' in data else None
         # update_or_create(uuid=location_uuid, ...)
         # doesn't work because of explicit attempt to set null to uuid!
+        if data.get('type', None) == 'R' or 'D' and \
+                not self.user.has_perms(
+                    LocationConfig.gql_mutation_create_region_locations_perms
+                ):
+            raise PermissionDenied(_("unauthorized"))
         if location_uuid:
             location = Location.objects.get(uuid=location_uuid)
             self._reset_location_before_update(location)
