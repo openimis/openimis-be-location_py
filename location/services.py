@@ -69,7 +69,8 @@ class LocationService:
         if data.get('type', None) == 'R' or 'D' and \
                 not self.user.has_perms(
                     LocationConfig.gql_mutation_create_region_locations_perms
-                ):
+                )\
+                or not self.user.is_superuser:
             raise PermissionDenied(_("unauthorized"))
         if location_uuid:
             location = Location.objects.get(uuid=location_uuid)
