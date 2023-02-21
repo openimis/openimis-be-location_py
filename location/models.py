@@ -115,7 +115,7 @@ class Location(core_models.VersionedModel):
         # just created. So we'll consider that if you were allowed to create it, you are also allowed to retrieve it.
         if settings.ROW_SECURITY \
                 and not user.has_perms(LocationConfig.gql_mutation_create_region_locations_perms) \
-                or not user.is_superuser:
+                and not user.is_superuser:
             if user.is_officer:
                 from core.models import Officer
                 return Officer.objects \

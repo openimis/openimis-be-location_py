@@ -66,12 +66,22 @@ class LocationService:
         parent_uuid = data.pop('parent_uuid') if 'parent_uuid' in data else None
         # update_or_create(uuid=location_uuid, ...)
         # doesn't work because of explicit attempt to set null to uuid!
-        if data.get('type', None) == 'R' or 'D' and \
-                not self.user.has_perms(
+        loc_type = data.get('type', None)
+        if loc_type in ['R', 'D'] \
+                and not self.user.has_perms(
                     LocationConfig.gql_mutation_create_region_locations_perms
-                )\
-                or not self.user.is_superuser:
-            raise PermissionDenied(_("unauthorized"))
+                ) \
+                and not self.user.is_superuser:
+            raise PermissionDenied(_("unauthorized to create or update region and district"))
+        if loc_type in ['M', 'V'] \
+                and not self.user.has_perms(
+            LocationConfig.gql_mutation_create_region_locations_perms
+        ) \
+                and not self.user.has_perms(
+            LocationConfig.gql_mutation_create_locations_perms
+        ) \
+                and not self.user.is_superuser:
+            raise PermissionDenied(_("unauthorized to create or update municipalities and villages"))
         if location_uuid:
             location = Location.objects.get(uuid=location_uuid)
             self._reset_location_before_update(location)
