@@ -113,7 +113,9 @@ class Location(core_models.VersionedModel):
 
         # OMT-280: if you create a new region and your user has district limitations, you won't find what you
         # just created. So we'll consider that if you were allowed to create it, you are also allowed to retrieve it.
-        if settings.ROW_SECURITY and not user.has_perms(LocationConfig.gql_mutation_create_locations_perms):
+        if settings.ROW_SECURITY \
+                and not user.has_perms(LocationConfig.gql_mutation_create_region_locations_perms) \
+                and not user.is_superuser:
             if user.is_officer:
                 from core.models import Officer
                 return Officer.objects \

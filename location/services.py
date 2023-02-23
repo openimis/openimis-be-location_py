@@ -2,7 +2,9 @@ import datetime
 import json
 
 from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import PermissionDenied
 from django.core.serializers.json import DjangoJSONEncoder
+from django.utils.translation import gettext as _
 
 from core.signals import register_service_signal
 from location.apps import LocationConfig
@@ -64,6 +66,7 @@ class LocationService:
         parent_uuid = data.pop('parent_uuid') if 'parent_uuid' in data else None
         # update_or_create(uuid=location_uuid, ...)
         # doesn't work because of explicit attempt to set null to uuid!
+        self._check_users_locations_rights(data['type'])
         if location_uuid:
             location = Location.objects.get(uuid=location_uuid)
             self._reset_location_before_update(location)
@@ -79,6 +82,23 @@ class LocationService:
             location.parent = Location.objects.get(uuid=parent_uuid)
         location.save()
         self._ensure_user_belongs_to_district(location)
+
+    def _check_users_locations_rights(self, loc_type):
+        if self.user.is_superuser \
+            or self.user.has_perms(
+                    LocationConfig.gql_mutation_create_region_locations_perms
+                ):
+            pass
+        elif loc_type in ['R', 'D']:
+            raise PermissionDenied(_(
+                "unauthorized to create or update region and district"
+            ))
+        elif not self.user.has_perms(
+                LocationConfig.gql_mutation_create_locations_perms
+        ):
+            raise PermissionDenied(_(
+                "unauthorized to create or update municipalities and villages"
+            ))
 
     @staticmethod
     def _reset_location_before_update(location):
