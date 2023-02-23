@@ -93,7 +93,7 @@ class LocationService:
             raise PermissionDenied(_(
                 "unauthorized to create or update region and district"
             ))
-        elif self.user.has_perms(
+        elif not self.user.has_perms(
                 LocationConfig.gql_mutation_create_locations_perms
         ):
             raise PermissionDenied(_(
