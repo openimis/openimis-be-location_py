@@ -66,22 +66,7 @@ class LocationService:
         parent_uuid = data.pop('parent_uuid') if 'parent_uuid' in data else None
         # update_or_create(uuid=location_uuid, ...)
         # doesn't work because of explicit attempt to set null to uuid!
-        loc_type = data.get('type', None)
-        if loc_type in ['R', 'D'] \
-                and not self.user.has_perms(
-                    LocationConfig.gql_mutation_create_region_locations_perms
-                ) \
-                and not self.user.is_superuser:
-            raise PermissionDenied(_("unauthorized to create or update region and district"))
-        if loc_type in ['M', 'V'] \
-                and not self.user.has_perms(
-            LocationConfig.gql_mutation_create_region_locations_perms
-        ) \
-                and not self.user.has_perms(
-            LocationConfig.gql_mutation_create_locations_perms
-        ) \
-                and not self.user.is_superuser:
-            raise PermissionDenied(_("unauthorized to create or update municipalities and villages"))
+        self._check_users_locations_rights(data['type'])
         if location_uuid:
             location = Location.objects.get(uuid=location_uuid)
             self._reset_location_before_update(location)
@@ -97,6 +82,23 @@ class LocationService:
             location.parent = Location.objects.get(uuid=parent_uuid)
         location.save()
         self._ensure_user_belongs_to_district(location)
+
+    def _check_users_locations_rights(self, loc_type):
+        if self.user.is_superuser \
+            or self.user.has_perms(
+                    LocationConfig.gql_mutation_create_region_locations_perms
+                ):
+            pass
+        elif loc_type in ['R', 'D']:
+            raise PermissionDenied(_(
+                "unauthorized to create or update region and district"
+            ))
+        elif self.user.has_perms(
+                LocationConfig.gql_mutation_create_locations_perms
+        ):
+            raise PermissionDenied(_(
+                "unauthorized to create or update municipalities and villages"
+            ))
 
     @staticmethod
     def _reset_location_before_update(location):
