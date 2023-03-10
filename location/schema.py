@@ -37,6 +37,7 @@ class Query(graphene.ObjectType):
         region_uuid=graphene.String(),
         district_uuid=graphene.String(),
         districts_uuids=graphene.List(of_type=graphene.String),
+        ignore_location=graphene.Boolean()
     )
     validate_location_code = graphene.Field(
         graphene.Boolean,
@@ -115,7 +116,8 @@ class Query(graphene.ObjectType):
                 filters += [Q(location__uuid__in=district_uuids)]
         if region_uuid is not None:
             filters += [Q(location__parent__uuid=region_uuid)]
-        filters += [Q(location__id__in=[l.location_id for l in dist])]
+        if (kwargs.get('ignore_location') == False or kwargs.get('ignore_location') is None):
+            filters += [Q(location__id__in=[l.location_id for l in dist])]
         return HealthFacility.objects.filter(*filters)
 
     def resolve_user_districts(self, info, **kwargs):
