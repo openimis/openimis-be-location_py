@@ -1,13 +1,17 @@
+from core.gql.custom_lookup import NotEqual
 import graphene
 import base64
 from graphene_django import DjangoObjectType
 from core import prefix_filterset, filter_validity, ExtendedConnection
 from location.models import HealthFacilityLegalForm, Location, HealthFacilitySubLevel, HealthFacilityCatchment, \
     HealthFacility, UserDistrict, OfficerVillage
+from core.custom_lookups import *
+from django.db.models import Field
 
 
 class LocationGQLType(DjangoObjectType):
     client_mutation_id = graphene.String()
+    Field.register_lookup(NotEqual)
 
     def resolve_parent(self, info):
         if "location_loader" in info.context.dataloaders and self.parent_id:
@@ -20,8 +24,8 @@ class LocationGQLType(DjangoObjectType):
         filter_fields = {
             "id": ["exact"],
             "uuid": ["exact"],
-            "code": ["exact", "istartswith", "icontains", "iexact"],
-            "name": ["exact", "istartswith", "icontains", "iexact"],
+            "code": ["exact", "istartswith", "icontains", "iexact", "ne"],
+            "name": ["exact", "istartswith", "icontains", "iexact", "ne"],
             "type": ["exact"],
             "parent__uuid": ["exact", "in"],  # can't import itself!
             "parent__id": ["exact", "in"],  # can't import itself!
