@@ -19,7 +19,10 @@ class Query(graphene.ObjectType):
         showHistory=graphene.Boolean(),
         orderBy=graphene.List(of_type=graphene.String)
     )
-    locations = DjangoFilterConnectionField(LocationGQLType)
+    locations = OrderedDjangoFilterConnectionField(
+        LocationGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+    )
     locations_str = DjangoFilterConnectionField(
         LocationGQLType,
         str=graphene.String(),
