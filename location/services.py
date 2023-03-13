@@ -2,7 +2,7 @@ import datetime
 import json
 
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils.translation import gettext as _
 
@@ -64,6 +64,12 @@ class LocationService:
     def update_or_create(self, data):
         location_uuid = data.pop('uuid') if 'uuid' in data else None
         parent_uuid = data.pop('parent_uuid') if 'parent_uuid' in data else None
+        incoming_code = data.get('code')
+        current_location = Location.objects.filter(uuid=location_uuid).first()
+        current_code = current_location.code if current_location else None
+        if current_code != incoming_code:
+            if self.check_unique_code(incoming_code):
+                raise ValidationError(_("mutation.location_code_duplicated"))
         # update_or_create(uuid=location_uuid, ...)
         # doesn't work because of explicit attempt to set null to uuid!
         self._check_users_locations_rights(data['type'])
