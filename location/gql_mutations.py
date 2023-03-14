@@ -94,10 +94,12 @@ class UpdateLocationMutation(CreateOrUpdateLocationMutation):
 
     @classmethod
     def async_mutate(cls, user, **data):
-        if not Location.objects.filter(code=data['code'], type=data['type'], validity_to=None).exists():
-            raise ValidationError("Location with this code doesn't already exist.")
         try:
-            return cls.do_mutate(LocationConfig.gql_mutation_edit_locations_perms, user, **data)
+            return cls.do_mutate(
+                LocationConfig.gql_mutation_edit_locations_perms,
+                user,
+                **data
+            )
         except Exception as exc:
             return [{
                 'message': _("location.mutation.failed_to_update_location") % {'code': data['code']},
