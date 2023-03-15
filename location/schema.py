@@ -131,6 +131,8 @@ class Query(graphene.ObjectType):
         return [UserDistrictGQLType(d) for d in UserDistrict.get_user_districts(info.context.user._u)]
 
     def resolve_officer_locations(self, info, **kwargs):
+        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+            raise PermissionDenied(_("unauthorized"))
         current_officer = Officer.objects.get(code=kwargs['officer_code'], validity_to__isnull=True)
         if 'location_type' in kwargs:
             return current_officer.officer_allowed_locations.filter(type=kwargs['location_type'])
