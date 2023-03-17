@@ -1,7 +1,7 @@
 from functools import reduce
 import uuid
 
-from core import fields, filter_validity
+from core import filter_validity
 from django.conf import settings
 from django.db import models
 from core import models as core_models
@@ -73,7 +73,7 @@ class LocationManager(models.Manager):
         return self.filter(id__in=[x.id for x in children])
 
 
-class Location(core_models.VersionedModel):
+class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
 
     id = models.AutoField(db_column='LocationId', primary_key=True)
@@ -149,7 +149,7 @@ class Location(core_models.VersionedModel):
         )
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblLocations'
 
 
@@ -175,7 +175,7 @@ class HealthFacilitySubLevel(models.Model):
         db_table = 'tblHFSublevel'
 
 
-class HealthFacility(core_models.VersionedModel):
+class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     id = models.AutoField(db_column='HfID', primary_key=True)
     uuid = models.CharField(
         db_column='HfUUID', max_length=36, default=uuid.uuid4, unique=True)
@@ -238,7 +238,7 @@ class HealthFacility(core_models.VersionedModel):
         return queryset
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblHF'
 
     LEVEL_HEALTH_CENTER = 'C'
