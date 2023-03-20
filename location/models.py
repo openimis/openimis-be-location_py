@@ -307,7 +307,8 @@ class UserDistrict(core_models.VersionedModel):
                                "We'll return an empty list, but it should be handled before reaching here.")
             return UserDistrict.objects.none()
         return (
-            UserDistrict.objects.select_related("location")
+            UserDistrict.objects.filter(location__type='D')
+            .select_related("location")
             .only("location__id", "location__parent__id")
             .select_related("location__parent")
             .filter(user=user)
