@@ -81,7 +81,7 @@ class HealthFacilityGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
     def resolve_location(self, info):
-        if not info.context.user.has_perms(LocationConfig.gql_query_health_facilities_perms):
+        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
             raise PermissionDenied(_("unauthorized"))
         if "location_loader" in info.context.dataloaders:
             return info.context.dataloaders["location_loader"].load(self.location_id)
