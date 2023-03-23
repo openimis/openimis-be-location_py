@@ -13,8 +13,9 @@ class LocationGQLType(DjangoObjectType):
     client_mutation_id = graphene.String()
 
     def resolve_parent(self, info):
-        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
-            raise PermissionDenied(_("unauthorized"))
+        # PERMS ISSUE
+        # if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        #     raise PermissionDenied(_("unauthorized"))
         if "location_loader" in info.context.dataloaders and self.parent_id:
             return info.context.dataloaders["location_loader"].load(self.parent_id)
         return self.parent
@@ -81,8 +82,10 @@ class HealthFacilityGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
     def resolve_location(self, info):
-        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
-            raise PermissionDenied(_("unauthorized"))
+        # PERMS ISSUE
+        # gql_query_locations_perms or gql_query_health_facilities_perms or None?
+        # if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        #     raise PermissionDenied(_("unauthorized"))
         if "location_loader" in info.context.dataloaders:
             return info.context.dataloaders["location_loader"].load(self.location_id)
 
