@@ -308,6 +308,7 @@ class UserDistrict(core_models.VersionedModel):
             return UserDistrict.objects.none()
         return (
             UserDistrict.objects.filter(location__type='D')
+            .filter(location__validity_to__isnull=True)
             .select_related("location")
             .only("location__id", "location__parent__id")
             .select_related("location__parent")
