@@ -86,7 +86,7 @@ class Query(graphene.ObjectType):
             raise PermissionDenied(_("unauthorized"))
 
     def resolve_locations_str(self, info, **kwargs):
-        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
 
         queryset = Location.get_queryset(None, info.context.user)
