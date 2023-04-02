@@ -299,7 +299,7 @@ class UserDistrict(core_models.VersionedModel):
             return (
                 UserDistrict.objects
                 .filter(*filter_validity())
-                .filter(location__type='D').all()
+                .filter(location__type='D')
             )
         if not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
@@ -310,11 +310,19 @@ class UserDistrict(core_models.VersionedModel):
             UserDistrict.objects.filter(location__type='D')
             .filter(location__validity_to__isnull=True)
             .select_related("location")
-            .only("location__id", "location__parent__id")
-            .select_related("location__parent")
+            .only(
+                "location__id",
+                "location__uuid",
+                "location__code",
+                "location__name",
+                "location__type",
+                "location__parent_id",
+                "location__parent__code",
+            )
+            .prefetch_related("location__parent")
             .filter(user=user)
             .filter(*filter_validity())
-            .order_by("location__parent_code")
+            .order_by("location__parent__code")
             .order_by("location__code")
             .exclude(location__parent__isnull=True)
         )
