@@ -99,9 +99,7 @@ class Query(graphene.ObjectType):
         return queryset.filter(*filters)
 
     def resolve_health_facilities_str(self, info, **kwargs):
-        if not info.context.user.has_perms(
-                LocationConfig.gql_query_locations_perms
-        ):
+        if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
         filters = [*filter_validity(**kwargs)]
         search = kwargs.get('str')
