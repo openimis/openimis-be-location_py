@@ -29,6 +29,8 @@ class LocationGQLType(DjangoObjectType):
             "name": ["exact", "istartswith", "icontains", "iexact"],
             "type": ["exact"],
             "parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__parent__parent__uuid": ["exact", "in"],  # can't import itself!
             "parent__id": ["exact", "in"],  # can't import itself!
         }
 
