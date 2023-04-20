@@ -86,7 +86,7 @@ class Query(graphene.ObjectType):
             raise PermissionDenied(_("unauthorized"))
 
     def resolve_locations_str(self, info, **kwargs):
-        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
 
         queryset = Location.get_queryset(None, info.context.user)
@@ -99,16 +99,13 @@ class Query(graphene.ObjectType):
         return queryset.filter(*filters)
 
     def resolve_health_facilities_str(self, info, **kwargs):
-        if not info.context.user.has_perms(
-                LocationConfig.gql_query_locations_perms
-        ):
+        if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
         filters = [*filter_validity(**kwargs)]
         search = kwargs.get('str')
         district_uuid = kwargs.get('district_uuid')
         district_uuids = kwargs.get('districts_uuids')
         region_uuid = kwargs.get('region_uuid')
-        dist = UserDistrict.get_user_districts(info.context.user._u)
         if search is not None:
             filters += [Q(code__icontains=search) | Q(name__icontains=search)]
         if district_uuid is not None:
@@ -118,7 +115,9 @@ class Query(graphene.ObjectType):
                 filters += [Q(location__uuid__in=district_uuids)]
         if region_uuid is not None:
             filters += [Q(location__parent__uuid=region_uuid)]
-        filters += [Q(location__id__in=[l.location_id for l in dist])]
+        if settings.ROW_SECURITY:
+            dist = UserDistrict.get_user_districts(info.context.user._u)
+            filters += [Q(location__id__in=[l.location_id for l in dist])]
         return HealthFacility.objects.filter(*filters)
 
     def resolve_user_districts(self, info, **kwargs):
@@ -131,6 +130,8 @@ class Query(graphene.ObjectType):
         return [UserDistrictGQLType(d) for d in UserDistrict.get_user_districts(info.context.user._u)]
 
     def resolve_officer_locations(self, info, **kwargs):
+        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+            raise PermissionDenied(_("unauthorized"))
         current_officer = Officer.objects.get(code=kwargs['officer_code'], validity_to__isnull=True)
         if 'location_type' in kwargs:
             return current_officer.officer_allowed_locations.filter(type=kwargs['location_type'])
