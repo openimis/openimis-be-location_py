@@ -35,7 +35,7 @@ class LocationGQLType(DjangoObjectType):
         }
 
     def resolve_client_mutation_id(self, info):
-        if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
         location_mutation = self.mutations.select_related(
             'mutation').filter(mutation__status=0).first()
