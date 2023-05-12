@@ -41,6 +41,27 @@ class LocationGQLType(DjangoObjectType):
         return Location.get_queryset(queryset, info.context.user)
 
 
+class LocationAllGQLType(LocationGQLType):
+    class Meta:
+        model = Location
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "uuid": ["exact"],
+            "code": ["exact", "istartswith", "icontains", "iexact"],
+            "name": ["exact", "istartswith", "icontains", "iexact"],
+            "type": ["exact"],
+            "parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__id": ["exact", "in"],  # can't import itself!
+        }
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return Location.objects.all()
+
+
 class HealthFacilityLegalFormGQLType(DjangoObjectType):
     class Meta:
         model = HealthFacilityLegalForm
