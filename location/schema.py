@@ -25,8 +25,8 @@ class Query(graphene.ObjectType):
     )
     locations_all = OrderedDjangoFilterConnectionField(
         LocationAllGQLType,
-
-    
+        orderBy=graphene.List(of_type=graphene.String)
+    )
     locations_str = DjangoFilterConnectionField(
         LocationGQLType,
         str=graphene.String(),
