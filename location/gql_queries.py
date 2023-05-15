@@ -2,7 +2,10 @@ from core.gql.custom_lookup import NotEqual
 import graphene
 import base64
 from graphene_django import DjangoObjectType
+from django.core.exceptions import PermissionDenied
+from django.utils.translation import gettext as _
 from core import prefix_filterset, filter_validity, ExtendedConnection
+from location.apps import LocationConfig
 from location.models import HealthFacilityLegalForm, Location, HealthFacilitySubLevel, HealthFacilityCatchment, \
     HealthFacility, UserDistrict, OfficerVillage
 from core.custom_lookups import *
@@ -14,6 +17,8 @@ class LocationGQLType(DjangoObjectType):
     Field.register_lookup(NotEqual)
 
     def resolve_parent(self, info):
+        if not info.context.user.is_authenticated:
+            raise PermissionDenied(_("unauthorized"))
         if "location_loader" in info.context.dataloaders and self.parent_id:
             return info.context.dataloaders["location_loader"].load(self.parent_id)
         return self.parent
@@ -28,10 +33,14 @@ class LocationGQLType(DjangoObjectType):
             "name": ["exact", "istartswith", "icontains", "iexact", "ne"],
             "type": ["exact"],
             "parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__parent__parent__uuid": ["exact", "in"],  # can't import itself!
             "parent__id": ["exact", "in"],  # can't import itself!
         }
 
     def resolve_client_mutation_id(self, info):
+        if not info.context.user.is_authenticated:
+            raise PermissionDenied(_("unauthorized"))
         location_mutation = self.mutations.select_related(
             'mutation').filter(mutation__status=0).first()
         return location_mutation.mutation.client_mutation_id if location_mutation else None
@@ -99,13 +108,19 @@ class HealthFacilityGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
     def resolve_location(self, info):
+        if not info.context.user.is_authenticated:
+            raise PermissionDenied(_("unauthorized"))
         if "location_loader" in info.context.dataloaders:
             return info.context.dataloaders["location_loader"].load(self.location_id)
 
     def resolve_catchments(self, info):
+        if not info.context.user.has_perms(LocationConfig.gql_query_health_facilities_perms):
+            raise PermissionDenied(_("unauthorized"))
         return self.catchments.filter(validity_to__isnull=True)
 
     def resolve_client_mutation_id(self, info):
+        if not info.context.user.has_perms(LocationConfig.gql_query_health_facilities_perms):
+            raise PermissionDenied(_("unauthorized"))
         health_facility_mutation = self.mutations.select_related(
             'mutation').filter(mutation__status=0).first()
         return health_facility_mutation.mutation.client_mutation_id if health_facility_mutation else None

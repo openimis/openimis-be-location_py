@@ -1,7 +1,7 @@
 from functools import reduce
 import uuid
 
-from core import fields, filter_validity
+from core import filter_validity
 from django.conf import settings
 from django.db import models
 from core import models as core_models
@@ -73,7 +73,7 @@ class LocationManager(models.Manager):
         return self.filter(id__in=[x.id for x in children])
 
 
-class Location(core_models.VersionedModel):
+class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
 
     id = models.AutoField(db_column='LocationId', primary_key=True)
@@ -149,7 +149,7 @@ class Location(core_models.VersionedModel):
         )
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblLocations'
 
 
@@ -175,7 +175,7 @@ class HealthFacilitySubLevel(models.Model):
         db_table = 'tblHFSublevel'
 
 
-class HealthFacility(core_models.VersionedModel):
+class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     id = models.AutoField(db_column='HfID', primary_key=True)
     uuid = models.CharField(
         db_column='HfUUID', max_length=36, default=uuid.uuid4, unique=True)
@@ -238,7 +238,7 @@ class HealthFacility(core_models.VersionedModel):
         return queryset
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblHF'
 
     LEVEL_HEALTH_CENTER = 'C'
@@ -299,7 +299,7 @@ class UserDistrict(core_models.VersionedModel):
             return (
                 UserDistrict.objects
                 .filter(*filter_validity())
-                .filter(location__type='D').all()
+                .filter(location__type='D')
             )
         if not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
@@ -307,12 +307,22 @@ class UserDistrict(core_models.VersionedModel):
                                "We'll return an empty list, but it should be handled before reaching here.")
             return UserDistrict.objects.none()
         return (
-            UserDistrict.objects.select_related("location")
-            .only("location__id", "location__parent__id")
-            .select_related("location__parent")
+            UserDistrict.objects.filter(location__type='D')
+            .filter(location__validity_to__isnull=True)
+            .select_related("location")
+            .only(
+                "location__id",
+                "location__uuid",
+                "location__code",
+                "location__name",
+                "location__type",
+                "location__parent_id",
+                "location__parent__code",
+            )
+            .prefetch_related("location__parent")
             .filter(user=user)
             .filter(*filter_validity())
-            .order_by("location__parent_code")
+            .order_by("location__parent__code")
             .order_by("location__code")
             .exclude(location__parent__isnull=True)
         )
