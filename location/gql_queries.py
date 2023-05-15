@@ -59,7 +59,7 @@ class LocationAllGQLType(LocationGQLType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        return Location.objects.all()
+        return Location.objects.filter(*filter_validity())
 
 
 class HealthFacilityLegalFormGQLType(DjangoObjectType):
