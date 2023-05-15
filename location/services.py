@@ -142,6 +142,8 @@ class HealthFacilityService:
         prev_hf_id = None
         if hf_uuid:
             hf = HealthFacility.objects.get(uuid=hf_uuid)
+            if hf.validity_to:
+                raise ValidationError(_("Cannot update historical hf."))
             prev_hf_id = hf.save_history()
             # reset the non required fields
             # (each update is 'complete', necessary to be able to set 'null')
