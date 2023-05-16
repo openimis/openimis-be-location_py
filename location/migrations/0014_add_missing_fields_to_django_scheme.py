@@ -9,7 +9,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0021_set_managed_to_true'),
+        ('core', '0019_extended_field'),
         ('location', '0013_auto_20230317_1534'),
     ]
 
