@@ -160,7 +160,7 @@ class HealthFacilityLegalForm(models.Model):
     alt_language = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblLegalForms'
 
 
@@ -171,7 +171,7 @@ class HealthFacilitySubLevel(models.Model):
     alt_language = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblHFSublevel'
 
 
@@ -272,7 +272,7 @@ class HealthFacilityCatchment(models.Model):
     audit_user_id = models.IntegerField(db_column='AuditUserId', blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblHFCatchment'
 
 
@@ -285,7 +285,7 @@ class UserDistrict(core_models.VersionedModel):
     audit_user_id = models.IntegerField(db_column="AuditUserID")
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblUsersDistricts'
 
     @classmethod
@@ -369,7 +369,7 @@ class OfficerVillage(core_models.VersionedModel):
     audit_user_id = models.IntegerField(db_column="AuditUserID")
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblOfficerVillages'
 
     @classmethod
