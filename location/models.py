@@ -301,6 +301,13 @@ class UserDistrict(core_models.VersionedModel):
                 .filter(*filter_validity())
                 .filter(location__type='D')
             )
+        elif user.is_imis_admin:
+            return (
+                UserDistrict.objects
+                .filter(*filter_validity())
+                .filter(location__type='D')
+                .distinct('location_id')
+            )
         if not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
                 logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
