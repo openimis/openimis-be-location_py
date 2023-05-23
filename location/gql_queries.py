@@ -8,7 +8,6 @@ from core import prefix_filterset, filter_validity, ExtendedConnection
 from location.apps import LocationConfig
 from location.models import HealthFacilityLegalForm, Location, HealthFacilitySubLevel, HealthFacilityCatchment, \
     HealthFacility, UserDistrict, OfficerVillage
-from core.custom_lookups import *
 from django.db.models import Field
 
 
