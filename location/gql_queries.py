@@ -33,7 +33,8 @@ class LocationGQLType(DjangoObjectType):
             "type": ["exact"],
             "parent__uuid": ["exact", "in"],  # can't import itself!
             "parent__parent__uuid": ["exact", "in"],  # can't import itself!
-            "parent__parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            # can't import itself!
+            "parent__parent__parent__uuid": ["exact", "in"],
             "parent__id": ["exact", "in"],  # can't import itself!
         }
 
@@ -61,7 +62,8 @@ class LocationAllGQLType(LocationGQLType):
             "type": ["exact"],
             "parent__uuid": ["exact", "in"],  # can't import itself!
             "parent__parent__uuid": ["exact", "in"],  # can't import itself!
-            "parent__parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            # can't import itself!
+            "parent__parent__parent__uuid": ["exact", "in"],
             "parent__id": ["exact", "in"],  # can't import itself!
         }
 
@@ -102,6 +104,7 @@ class HealthFacilityGQLType(DjangoObjectType):
             "sub_level": ["exact", "isnull"],
             "care_type": ["exact"],
             "legal_form__code": ["exact"],
+            "phone": ["exact", "istartswith", "icontains", "iexact"],
             **prefix_filterset("location__", LocationGQLType._meta.filter_fields)
         }
         connection_class = ExtendedConnection
@@ -132,7 +135,8 @@ class UserRegionGQLType(graphene.ObjectType):
     name = graphene.String()
 
     def __init__(self, region):
-        self.id = str(base64.b64encode(f"LocationGQLType:{region.id}".encode()), 'utf-8')
+        self.id = str(base64.b64encode(
+            f"LocationGQLType:{region.id}".encode()), 'utf-8')
         self.uuid = region.uuid
         self.code = region.code
         self.name = region.name
@@ -146,7 +150,8 @@ class UserDistrictGQLType(graphene.ObjectType):
     parent = graphene.Field(UserRegionGQLType)
 
     def __init__(self, district):
-        self.id = str(base64.b64encode(f"LocationGQLType:{district.location_id}".encode()), 'utf-8')
+        self.id = str(base64.b64encode(
+            f"LocationGQLType:{district.location_id}".encode()), 'utf-8')
         self.uuid = district.location.uuid
         self.code = district.location.code
         self.name = district.location.name
