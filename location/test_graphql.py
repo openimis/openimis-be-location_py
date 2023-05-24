@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from core.models import User
 from core.test_helpers import create_test_interactive_user
 from django.conf import settings
+from django.core import exceptions
 from graphene_django.utils.testing import GraphQLTestCase
 from graphql_jwt.shortcuts import get_token
-from location.models import Location
+from location.models import Location, HealthFacility, HealthFacilityLegalForm
 from location.test_helpers import create_test_location, assign_user_districts
 from rest_framework import status
 
@@ -257,3 +258,138 @@ class LocationGQLTestCase(GraphQLTestCase):
         self.assertIsNotNone(self.test_location_delete.validity_to)
 
         # TODO test the newParentUUID
+
+
+class HealthFacilityGQLTestCase(GraphQLTestCase):
+    GRAPHQL_URL = f'/{settings.SITE_ROOT()}graphql'
+    # This is required by some version of graphene but is never used. It should be set to the schema but the import
+    # is shown as an error in the IDE, so leaving it as True.
+    GRAPHQL_SCHEMA = True
+    admin_user = None
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.admin_user = create_test_interactive_user(username="testHFAdmin")
+        cls.admin_token = get_token(cls.admin_user, DummyContext(user=cls.admin_user))
+        cls.noright_user = create_test_interactive_user(username="testHFNoRight", roles=[1])
+        cls.noright_token = get_token(cls.noright_user, DummyContext(user=cls.noright_user))
+        cls.admin_dist_user = create_test_interactive_user(username="testHFDist")
+        assign_user_districts(cls.admin_dist_user, ["R1D1", "R2D1", "R2D2"])
+        cls.admin_dist_token = get_token(cls.admin_dist_user, DummyContext(user=cls.admin_dist_user))
+
+    def _getHFFromAPI(self, code):
+        """
+        Utility method that fetches HF from GraphQL whose code matches the given parameter.
+        If multiple HF have the same code, this method will fail.
+        """
+        query = f"""
+            {{
+                healthFacilities(code:"{code}") {{
+                    edges {{
+                        node {{
+                            id name code level
+                        }}
+                    }}
+                }}
+            }}
+        """
+        response = self.query(query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_dist_token}"})
+
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        content = json.loads(response.content)
+
+        self.assertResponseNoErrors(response)
+        return content["data"]["healthFacilities"]["edges"][0]["node"]
+
+    def test_mutation_create_health_facility_minimal_mandatory_fields(self):
+        """
+        This method tests that an HF can be created with its minimal mandatory fields.
+        This method creates an HF by using the GraphQL API, checks that a matching HF
+        is found in the database through the ORM, asks GraphQL for the newly created HF
+        and compares the database-fetched HF to the GraphQL-fetched one.
+        """
+        client_mutation_id = "tsthfgql1"
+        code = "tsthfx"
+        name = "Test HF X"
+        legal_form = HealthFacilityLegalForm.objects.filter(code='C').first()
+        level = "H"
+        location = Location.objects.filter(code='R1D1', validity_to__isnull=True).first()  # create_test_location('V')
+        care_type = "B"
+        query = f"""
+            mutation {{
+              createHealthFacility(input: {{
+                clientMutationId:"{client_mutation_id}",
+                code:"{code}",
+                name:"{name}",
+                legalFormId:"{legal_form.code}",
+                level:"{level}",
+                locationId:{location.id},
+                careType: "{care_type}",
+              }}) {{
+                internalId
+                clientMutationId
+              }}
+            }}
+        """
+        response = self.query(query,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+                              )
+
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        content = json.loads(response.content)
+
+        self.assertResponseNoErrors(response)
+
+        self.assertEqual(content["data"]["createHealthFacility"]["clientMutationId"], client_mutation_id)
+
+        db_hf = HealthFacility.objects.get(code=code)
+        self.assertIsNotNone(db_hf)
+        self.assertEqual(db_hf.name, name)
+        self.assertEqual(db_hf.code, code)
+        self.assertEqual(db_hf.legal_form, legal_form)
+        self.assertEqual(db_hf.level, level)
+        self.assertEqual(db_hf.location, location)
+        self.assertEqual(db_hf.care_type, care_type)
+
+        retrieved_item = self._getHFFromAPI(code=code)
+        self.assertIsNotNone(retrieved_item)
+        self.assertEqual(retrieved_item["name"], db_hf.name)
+        self.assertEqual(retrieved_item["code"], db_hf.code)
+
+    def test_mutation_create_health_facility_error_mandatory_fields(self):
+        """
+        This method tests that a health facility cannot be created through the GraphQL API
+        if any of its mandatory fields is not present.
+        In this case, the `legal_form` field is missing.
+        """
+        client_mutation_id = "tsthfgql2"
+        code = "tsthfx2"
+        name = "Test HF X2"
+        level = "D"
+        location = create_test_location('V')
+        care_type = "I"
+        query = f"""
+            mutation {{
+              createHealthFacility(input: {{
+                clientMutationId:"{client_mutation_id}",
+                code:"{code}",
+                name:"{name}",
+                level:"{level}",
+                locationId:{location.id},
+                careType: "{care_type}",
+              }}) {{
+                internalId
+                clientMutationId
+              }}
+            }}
+        """
+        response = self.query(query,
+                              headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+                              )
+
+        self.assertEquals(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertResponseHasErrors(response)
+
+        with self.assertRaises(exceptions.ObjectDoesNotExist):
+            HealthFacility.objects.get(code=code)

@@ -1,13 +1,14 @@
 from functools import reduce
 import uuid
 
-from core import fields, filter_validity
+from core import filter_validity
 from django.conf import settings
 from django.db import models
 from core import models as core_models
 from graphql import ResolveInfo
 from .apps import LocationConfig
 import logging
+from django.db.models import Q
 
 logger = logging.getLogger(__file__)
 
@@ -15,25 +16,25 @@ logger = logging.getLogger(__file__)
 class LocationManager(models.Manager):
     def parents(self, location_id):
         parents = Location.objects.raw(
-            """
-            WITH CTE_PARENTS AS (
+            f"""
+            WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
             SELECT
-                LocationId,
-                LocationType,
-                ParentLocationId
+                "LocationId",
+                "LocationType",
+                "ParentLocationId"
             FROM
-                tblLocations
-            WHERE LocationId = %s
+                "tblLocations"
+            WHERE "LocationId" = %s
             UNION ALL
 
             SELECT
-                parent.LocationId,
-                parent.LocationType,
-                parent.ParentLocationId
+                parent."LocationId",
+                parent."LocationType",
+                parent."ParentLocationId"
             FROM
-                tblLocations parent
+                "tblLocations" parent
                 INNER JOIN CTE_PARENTS leaf
-                    ON parent.LocationId = leaf.ParentLocationId
+                    ON parent."LocationId" = leaf."ParentLocationId"
             )
             SELECT * FROM CTE_PARENTS;
         """,
@@ -43,36 +44,36 @@ class LocationManager(models.Manager):
 
     def children(self, location_id):
         children = Location.objects.raw(
-            """
-            WITH CTE_CHILDREN AS (
-            SELECT
-                LocationId,
-                LocationType,
-                ParentLocationId,
-                0 as Level
-            FROM
-                tblLocations
-            WHERE ParentLocationId = %s
-            UNION ALL
+            f"""
+                WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_CHILDREN AS (
+                SELECT
+                    "LocationId",
+                    "LocationType",
+                    "ParentLocationId",
+                    0 as "Level"
+                FROM
+                    "tblLocations"
+                WHERE "ParentLocationId" = %s
+                UNION ALL
 
-            SELECT
-                child.LocationId,
-                child.LocationType,
-                child.ParentLocationId,
-                parent.Level + 1
-            FROM
-                tblLocations child
-                INNER JOIN CTE_CHILDREN parent
-                    ON child.ParentLocationId = parent.LocationId
-            )
-            SELECT * FROM CTE_CHILDREN;
-        """,
+                SELECT
+                    child."LocationId",
+                    child."LocationType",
+                    child."ParentLocationId",
+                    parent."Level" + 1
+                FROM
+                    "tblLocations" child
+                    INNER JOIN CTE_CHILDREN parent
+                        ON child."ParentLocationId" = parent."LocationId"
+                )
+                SELECT * FROM CTE_CHILDREN;
+            """,
             (location_id,),
         )
         return self.filter(id__in=[x.id for x in children])
 
 
-class Location(core_models.VersionedModel):
+class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
 
     id = models.AutoField(db_column='LocationId', primary_key=True)
@@ -112,21 +113,43 @@ class Location(core_models.VersionedModel):
 
         # OMT-280: if you create a new region and your user has district limitations, you won't find what you
         # just created. So we'll consider that if you were allowed to create it, you are also allowed to retrieve it.
-        if settings.ROW_SECURITY and not user.has_perms(LocationConfig.gql_mutation_create_locations_perms):
-            dists = UserDistrict.get_user_districts(user._u)
-            regs = set([d.location.parent.id for d in dists])
-            dists = set([d.location.id for d in dists])
-            filters = []
-            prev = "id"
-            for i, tpe in enumerate(LocationConfig.location_types):
-                loc_ids = dists if i else regs
-                filters += [models.Q(type__exact=tpe) & models.Q(**{"%s__in" % prev: loc_ids})]
-                prev = "parent__" + prev if i > 1 else "parent_" + prev if i else prev
-            return queryset.filter(reduce((lambda x, y: x | y), filters))
+        if settings.ROW_SECURITY \
+                and not user.has_perms(LocationConfig.gql_mutation_create_region_locations_perms) \
+                and not user.is_superuser:
+            if user.is_officer:
+                from core.models import Officer
+                return Officer.objects \
+                    .filter(code=user.username, has_login=True, validity_to__isnull=True) \
+                    .get().officer_allowed_locations
+            elif user.is_claim_admin:
+                from claim.models import ClaimAdmin
+                return ClaimAdmin.objects \
+                    .filter(code=user.username, has_login=True, validity_to__isnull=True) \
+                    .get().officer_allowed_locations
+            else:
+                dists = UserDistrict.get_user_districts(user._u)
+                regs = set([d.location.parent.id for d in dists])
+                dists = set([d.location.id for d in dists])
+                filters = []
+                prev = "id"
+                for i, tpe in enumerate(LocationConfig.location_types):
+                    loc_ids = dists if i else regs
+                    filters += [models.Q(type__exact=tpe) & models.Q(**{"%s__in" % prev: loc_ids})]
+                    prev = "parent__" + prev if i > 1 else "parent_" + prev if i else prev
+                return queryset.filter(reduce((lambda x, y: x | y), filters))
         return queryset
 
+    @staticmethod
+    def build_user_location_filter_query(user: core_models.InteractiveUser) -> Q:
+        user_districts = UserDistrict.get_user_districts(user)
+
+        return Q(location__in=Location.objects.filter(uuid__in=user_districts.values_list('location__uuid', flat=True))) | Q(
+            location__in=Location.objects.filter(uuid__in=user_districts.values_list('location__parent__uuid', flat=True))) | Q(
+            location__isnull=True
+        )
+
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblLocations'
 
 
@@ -137,7 +160,7 @@ class HealthFacilityLegalForm(models.Model):
     alt_language = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblLegalForms'
 
 
@@ -148,11 +171,11 @@ class HealthFacilitySubLevel(models.Model):
     alt_language = models.CharField(db_column='AltLanguage', max_length=50, blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblHFSublevel'
 
 
-class HealthFacility(core_models.VersionedModel):
+class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     id = models.AutoField(db_column='HfID', primary_key=True)
     uuid = models.CharField(
         db_column='HfUUID', max_length=36, default=uuid.uuid4, unique=True)
@@ -188,7 +211,7 @@ class HealthFacility(core_models.VersionedModel):
                                            related_name="health_facilities")
     items_pricelist = models.ForeignKey('medical_pricelist.ItemsPricelist', models.DO_NOTHING, db_column='PLItemID',
                                         blank=True, null=True, related_name="health_facilities")
-    offline = models.BooleanField(db_column='OffLine')
+    offline = models.BooleanField(db_column='OffLine', default=False)
     # row_id = models.BinaryField(db_column='RowID', blank=True, null=True)
     audit_user_id = models.IntegerField(db_column='AuditUserID')
 
@@ -208,13 +231,14 @@ class HealthFacility(core_models.VersionedModel):
             return queryset.filter(id=-1)
         if settings.ROW_SECURITY:
             dist = UserDistrict.get_user_districts(user._u)
-            return queryset.filter(
-                location_id__in=[l.location_id for l in dist]
-            )
+            if dist:
+                return queryset.filter(
+                    location_id__in=[l.location_id for l in dist]
+                )
         return queryset
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblHF'
 
     LEVEL_HEALTH_CENTER = 'C'
@@ -248,7 +272,7 @@ class HealthFacilityCatchment(models.Model):
     audit_user_id = models.IntegerField(db_column='AuditUserId', blank=True, null=True)
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblHFCatchment'
 
 
@@ -261,7 +285,7 @@ class UserDistrict(core_models.VersionedModel):
     audit_user_id = models.IntegerField(db_column="AuditUserID")
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblUsersDistricts'
 
     @classmethod
@@ -271,18 +295,34 @@ class UserDistrict(core_models.VersionedModel):
         :param user: InteractiveUser to filter on
         :return: UserDistrict *objects*
         """
+        if user.is_superuser is True:
+            return (
+                UserDistrict.objects
+                .filter(*filter_validity())
+                .filter(location__type='D')
+            )
         if not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
                 logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
                                "We'll return an empty list, but it should be handled before reaching here.")
             return UserDistrict.objects.none()
         return (
-            UserDistrict.objects.select_related("location")
-            .only("location__id", "location__parent__id")
-            .select_related("location__parent")
+            UserDistrict.objects.filter(location__type='D')
+            .filter(location__validity_to__isnull=True)
+            .select_related("location")
+            .only(
+                "location__id",
+                "location__uuid",
+                "location__code",
+                "location__name",
+                "location__type",
+                "location__parent_id",
+                "location__parent__code",
+            )
+            .prefetch_related("location__parent")
             .filter(user=user)
             .filter(*filter_validity())
-            .order_by("location__parent_code")
+            .order_by("location__parent__code")
             .order_by("location__code")
             .exclude(location__parent__isnull=True)
         )
@@ -329,7 +369,7 @@ class OfficerVillage(core_models.VersionedModel):
     audit_user_id = models.IntegerField(db_column="AuditUserID")
 
     class Meta:
-        managed = False
+        managed = True
         db_table = 'tblOfficerVillages'
 
     @classmethod

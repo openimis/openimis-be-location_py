@@ -2,7 +2,9 @@ import datetime
 import json
 
 from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
+from django.utils.translation import gettext as _
 
 from core.signals import register_service_signal
 from location.apps import LocationConfig
@@ -46,22 +48,63 @@ class LocationService:
     def __init__(self, user):
         self.user = user
 
+    @staticmethod
+    def check_unique_code(code):
+        if Location.objects.filter(code=code, validity_to__isnull=True).exists():
+            return [{"message": "Location code %s already exists" % code}]
+        return []
+
+    def validate_data(self, **data):
+        error = None
+        error = self.check_unique_code(data["code"])
+
+        return error
+
     @register_service_signal('location_service.update_or_create')
     def update_or_create(self, data):
         location_uuid = data.pop('uuid') if 'uuid' in data else None
         parent_uuid = data.pop('parent_uuid') if 'parent_uuid' in data else None
+        incoming_code = data.get('code')
+        current_location = Location.objects.filter(uuid=location_uuid).first()
+        current_code = current_location.code if current_location else None
+        if current_code != incoming_code:
+            if self.check_unique_code(incoming_code):
+                raise ValidationError(_("mutation.location_code_duplicated"))
         # update_or_create(uuid=location_uuid, ...)
         # doesn't work because of explicit attempt to set null to uuid!
+        self._check_users_locations_rights(data['type'])
         if location_uuid:
             location = Location.objects.get(uuid=location_uuid)
             self._reset_location_before_update(location)
             [setattr(location, key, data[key]) for key in data]
         else:
-            location = Location.objects.create(**data)
+            error = self.validate_data(**data)
+            if error:
+                raise ValueError(error)
+            else:
+                location = Location.objects.create(**data)
+
         if parent_uuid:
             location.parent = Location.objects.get(uuid=parent_uuid)
         location.save()
         self._ensure_user_belongs_to_district(location)
+
+    def _check_users_locations_rights(self, loc_type):
+        if self.user.is_superuser \
+            or self.user.has_perms(
+                    LocationConfig.gql_mutation_create_region_locations_perms
+                ):
+            pass
+        elif loc_type in ['R', 'D']:
+            raise PermissionDenied(_(
+                "unauthorized to create or update region and district"
+            ))
+        elif not self.user.has_perms(
+                LocationConfig.gql_mutation_create_locations_perms
+        ):
+            raise PermissionDenied(_(
+                "unauthorized to create or update municipalities and villages"
+            ))
 
     @staticmethod
     def _reset_location_before_update(location):
@@ -83,6 +126,12 @@ class HealthFacilityService:
     def __init__(self, user):
         self.user = user
 
+    @staticmethod
+    def check_unique_code(code):
+        if HealthFacility.objects.filter(code=code, validity_to__isnull=True).exists():
+            return [{"message": "Health facility code %s already exists" % code}]
+        return []
+
     @register_service_signal('health_facility_service.update_or_create')
     def update_or_create(self, data):
         hf_uuid = data.pop('uuid') if 'uuid' in data else None
@@ -93,14 +142,14 @@ class HealthFacilityService:
         prev_hf_id = None
         if hf_uuid:
             hf = HealthFacility.objects.get(uuid=hf_uuid)
+            if hf.validity_to:
+                raise ValidationError(_("Cannot update historical hf."))
             prev_hf_id = hf.save_history()
             # reset the non required fields
             # (each update is 'complete', necessary to be able to set 'null')
             self._reset_health_facility_before_update(hf)
             [setattr(hf, key, data[key]) for key in data]
         else:
-            # UI don't foresee a field for offline > set via API (and mobile 'world' ?
-            data['offline'] = False
             hf = HealthFacility.objects.create(**data)
         self._process_catchments(catchments, prev_hf_id, hf.id, hf.catchments)
         hf.save()
