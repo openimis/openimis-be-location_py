@@ -1,3 +1,4 @@
+from core.gql.custom_lookup import NotEqual
 import graphene
 import base64
 from graphene_django import DjangoObjectType
@@ -7,10 +8,12 @@ from core import prefix_filterset, filter_validity, ExtendedConnection
 from location.apps import LocationConfig
 from location.models import HealthFacilityLegalForm, Location, HealthFacilitySubLevel, HealthFacilityCatchment, \
     HealthFacility, UserDistrict, OfficerVillage
+from django.db.models import Field
 
 
 class LocationGQLType(DjangoObjectType):
     client_mutation_id = graphene.String()
+    Field.register_lookup(NotEqual)
 
     def resolve_parent(self, info):
         if not info.context.user.is_authenticated:
@@ -25,8 +28,8 @@ class LocationGQLType(DjangoObjectType):
         filter_fields = {
             "id": ["exact"],
             "uuid": ["exact"],
-            "code": ["exact", "istartswith", "icontains", "iexact"],
-            "name": ["exact", "istartswith", "icontains", "iexact"],
+            "code": ["exact", "istartswith", "icontains", "iexact", "ne"],
+            "name": ["exact", "istartswith", "icontains", "iexact", "ne"],
             "type": ["exact"],
             "parent__uuid": ["exact", "in"],  # can't import itself!
             "parent__parent__uuid": ["exact", "in"],  # can't import itself!
@@ -44,6 +47,27 @@ class LocationGQLType(DjangoObjectType):
     @classmethod
     def get_queryset(cls, queryset, info):
         return Location.get_queryset(queryset, info.context.user)
+
+
+class LocationAllGQLType(LocationGQLType):
+    class Meta:
+        model = Location
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "id": ["exact"],
+            "uuid": ["exact"],
+            "code": ["exact", "istartswith", "icontains", "iexact"],
+            "name": ["exact", "istartswith", "icontains", "iexact"],
+            "type": ["exact"],
+            "parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            "parent__id": ["exact", "in"],  # can't import itself!
+        }
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        return Location.objects.filter(*filter_validity())
 
 
 class HealthFacilityLegalFormGQLType(DjangoObjectType):
