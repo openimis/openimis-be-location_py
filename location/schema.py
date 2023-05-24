@@ -23,6 +23,10 @@ class Query(graphene.ObjectType):
         LocationGQLType,
         orderBy=graphene.List(of_type=graphene.String),
     )
+    locations_all = OrderedDjangoFilterConnectionField(
+        LocationAllGQLType,
+        orderBy=graphene.List(of_type=graphene.String)
+    )
     locations_str = DjangoFilterConnectionField(
         LocationGQLType,
         str=graphene.String(),
@@ -40,6 +44,7 @@ class Query(graphene.ObjectType):
         region_uuid=graphene.String(),
         district_uuid=graphene.String(),
         districts_uuids=graphene.List(of_type=graphene.String),
+        ignore_location=graphene.Boolean()
     )
     validate_location_code = graphene.Field(
         graphene.Boolean,
@@ -85,6 +90,12 @@ class Query(graphene.ObjectType):
         if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
 
+    def resolve_locations_all(self, info, **kwargs):
+        # OMT-281 allow querying to anyone, with limitations in the get_queryset
+        # if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
+        if info.context.user.is_anonymous:
+            raise PermissionDenied(_("unauthorized"))
+
     def resolve_locations_str(self, info, **kwargs):
         if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
@@ -115,9 +126,13 @@ class Query(graphene.ObjectType):
                 filters += [Q(location__uuid__in=district_uuids)]
         if region_uuid is not None:
             filters += [Q(location__parent__uuid=region_uuid)]
-        if settings.ROW_SECURITY:
-            dist = UserDistrict.get_user_districts(info.context.user._u)
-            filters += [Q(location__id__in=[l.location_id for l in dist])]
+
+        if (kwargs.get('ignore_location') == False or kwargs.get('ignore_location') is None):
+
+          if settings.ROW_SECURITY:
+              dist = UserDistrict.get_user_districts(info.context.user._u)
+
+              filters += [Q(location__id__in=[l.location_id for l in dist])]
         return HealthFacility.objects.filter(*filters)
 
     def resolve_user_districts(self, info, **kwargs):
