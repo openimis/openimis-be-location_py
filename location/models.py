@@ -302,6 +302,7 @@ class UserDistrict(core_models.VersionedModel):
                 .filter(location__type='D')
             )
         elif user.is_imis_admin:
+            # TODO: Use 'distinct()' when it is supported by MSSQL or if PostgreSQL becomes the sole database.
             distinct_districts_codes = UserDistrict.objects.all().values_list('location__code')
             usd_list = list(set(item[0] for item in distinct_districts_codes))
             user_district_ids = []
