@@ -92,7 +92,7 @@ class Query(graphene.ObjectType):
     def resolve_locations_all(self, info, **kwargs):
         if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
-        return Location.objects.filter(validity_to__isnull=True).all()
+        return Location.objects.filter(*filter_validity()).all()
 
     def resolve_locations_str(self, info, **kwargs):
         if info.context.user.is_anonymous:
