@@ -1,9 +1,8 @@
 import graphene_django_optimizer as gql_optimizer
 
-from core.models import Officer, InteractiveUser
+from core.models import Officer
 from core.schema import OrderedDjangoFilterConnectionField
 from core.schema import signal_mutation_module_validate
-from django.db.models import Q
 from django.utils.translation import gettext as _
 from graphene_django.filter import DjangoFilterConnectionField
 
@@ -85,6 +84,8 @@ class Query(graphene.ObjectType):
         return False if errors else True
 
     def resolve_locations(self, info, **kwargs):
+        # OMT-281 allow querying to anyone, with limitations in the get_queryset
+        # if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
         if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
 

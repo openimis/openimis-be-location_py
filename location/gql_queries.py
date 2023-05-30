@@ -4,7 +4,7 @@ import base64
 from graphene_django import DjangoObjectType
 from django.core.exceptions import PermissionDenied
 from django.utils.translation import gettext as _
-from core import prefix_filterset, filter_validity, ExtendedConnection
+from core import prefix_filterset, ExtendedConnection
 from location.apps import LocationConfig
 from location.models import HealthFacilityLegalForm, Location, HealthFacilitySubLevel, HealthFacilityCatchment, \
     HealthFacility, UserDistrict, OfficerVillage
