@@ -24,7 +24,7 @@ class Query(graphene.ObjectType):
         orderBy=graphene.List(of_type=graphene.String),
     )
     locations_all = OrderedDjangoFilterConnectionField(
-        LocationAllGQLType,
+        LocationGQLType,
         orderBy=graphene.List(of_type=graphene.String)
     )
     locations_str = DjangoFilterConnectionField(
@@ -85,16 +85,13 @@ class Query(graphene.ObjectType):
         return False if errors else True
 
     def resolve_locations(self, info, **kwargs):
-        # OMT-281 allow querying to anyone, with limitations in the get_queryset
-        # if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
         if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
 
     def resolve_locations_all(self, info, **kwargs):
-        # OMT-281 allow querying to anyone, with limitations in the get_queryset
-        # if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
         if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
+        return Location.objects.filter(validity_to__isnull=True).all()
 
     def resolve_locations_str(self, info, **kwargs):
         if info.context.user.is_anonymous:
