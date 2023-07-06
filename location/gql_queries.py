@@ -4,7 +4,7 @@ import base64
 from graphene_django import DjangoObjectType
 from django.core.exceptions import PermissionDenied
 from django.utils.translation import gettext as _
-from core import prefix_filterset, filter_validity, ExtendedConnection
+from core import prefix_filterset, ExtendedConnection
 from location.apps import LocationConfig
 from location.models import HealthFacilityLegalForm, Location, HealthFacilitySubLevel, HealthFacilityCatchment, \
     HealthFacility, UserDistrict, OfficerVillage
@@ -33,7 +33,8 @@ class LocationGQLType(DjangoObjectType):
             "type": ["exact"],
             "parent__uuid": ["exact", "in"],  # can't import itself!
             "parent__parent__uuid": ["exact", "in"],  # can't import itself!
-            "parent__parent__parent__uuid": ["exact", "in"],  # can't import itself!
+            # can't import itself!
+            "parent__parent__parent__uuid": ["exact", "in"],
             "parent__id": ["exact", "in"],  # can't import itself!
         }
 
@@ -46,28 +47,10 @@ class LocationGQLType(DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        return Location.get_queryset(queryset, info.context.user)
-
-
-class LocationAllGQLType(LocationGQLType):
-    class Meta:
-        model = Location
-        interfaces = (graphene.relay.Node,)
-        filter_fields = {
-            "id": ["exact"],
-            "uuid": ["exact"],
-            "code": ["exact", "istartswith", "icontains", "iexact"],
-            "name": ["exact", "istartswith", "icontains", "iexact"],
-            "type": ["exact"],
-            "parent__uuid": ["exact", "in"],  # can't import itself!
-            "parent__parent__uuid": ["exact", "in"],  # can't import itself!
-            "parent__parent__parent__uuid": ["exact", "in"],  # can't import itself!
-            "parent__id": ["exact", "in"],  # can't import itself!
-        }
-
-    @classmethod
-    def get_queryset(cls, queryset, info):
-        return Location.objects.filter(*filter_validity())
+        if info.field_name == "locationsAll":
+            return queryset
+        else:
+            return Location.get_queryset(queryset, info.context.user)
 
 
 class HealthFacilityLegalFormGQLType(DjangoObjectType):
@@ -102,6 +85,7 @@ class HealthFacilityGQLType(DjangoObjectType):
             "sub_level": ["exact", "isnull"],
             "care_type": ["exact"],
             "legal_form__code": ["exact"],
+            "phone": ["exact", "istartswith", "icontains", "iexact"],
             **prefix_filterset("location__", LocationGQLType._meta.filter_fields)
         }
         connection_class = ExtendedConnection
@@ -132,7 +116,8 @@ class UserRegionGQLType(graphene.ObjectType):
     name = graphene.String()
 
     def __init__(self, region):
-        self.id = str(base64.b64encode(f"LocationGQLType:{region.id}".encode()), 'utf-8')
+        self.id = str(base64.b64encode(
+            f"LocationGQLType:{region.id}".encode()), 'utf-8')
         self.uuid = region.uuid
         self.code = region.code
         self.name = region.name
@@ -146,7 +131,8 @@ class UserDistrictGQLType(graphene.ObjectType):
     parent = graphene.Field(UserRegionGQLType)
 
     def __init__(self, district):
-        self.id = str(base64.b64encode(f"LocationGQLType:{district.location_id}".encode()), 'utf-8')
+        self.id = str(base64.b64encode(
+            f"LocationGQLType:{district.location_id}".encode()), 'utf-8')
         self.uuid = district.location.uuid
         self.code = district.location.code
         self.name = district.location.name
