@@ -1,9 +1,11 @@
-import datetime
 import json
+from typing import Union
+from uuid import UUID
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db.models import Q
 from django.utils.translation import gettext as _
 
 from core.signals import register_service_signal
@@ -26,7 +28,24 @@ def check_authentication(function):
     return wrapper
 
 
-class HealthFacilityLevel(object):
+def get_ancestor_location_filter(ancestor_uuid: Union[str, UUID], location_field='location', levels=4) -> Q:
+    """
+    A generic service that return a Q object that can be used to filter if a model belongs to a location
+    or any of its children.
+
+    :param ancestor_uuid: UUID of the target location
+    :param location_field: The name of the location field in the filtered model
+    :param levels: The number of location levels to search up. Should not change until location rework.
+    :return: Q object that checks parent locations "levels" levels deep
+    """
+    filters = Q(**{location_field + '__uuid': ancestor_uuid, location_field + '__validity_to__isnull': True})
+    for i in range(1, levels):
+        filters = filters | Q(**{location_field + '__parent' * i + '__uuid': ancestor_uuid,
+                                 location_field + '__parent' * i + '__validity_to__isnull': True})
+    return filters
+
+
+class HealthFacilityLevel:
     def __init__(self, user):
         self.user = user
 
@@ -91,9 +110,9 @@ class LocationService:
 
     def _check_users_locations_rights(self, loc_type):
         if self.user.is_superuser \
-            or self.user.has_perms(
-                    LocationConfig.gql_mutation_create_region_locations_perms
-                ):
+                or self.user.has_perms(
+            LocationConfig.gql_mutation_create_region_locations_perms
+        ):
             pass
         elif loc_type in ['R', 'D']:
             raise PermissionDenied(_(
