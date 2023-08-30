@@ -86,6 +86,7 @@ class HealthFacilityGQLType(DjangoObjectType):
             "care_type": ["exact"],
             "legal_form__code": ["exact"],
             "phone": ["exact", "istartswith", "icontains", "iexact"],
+            "status": ["exact"],
             **prefix_filterset("location__", LocationGQLType._meta.filter_fields)
         }
         connection_class = ExtendedConnection

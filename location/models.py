@@ -176,6 +176,12 @@ class HealthFacilitySubLevel(models.Model):
 
 
 class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
+    class Status(models.TextChoices):
+        ACTIVE = "AC"
+        INACTIVE = "IN"
+        DELISTED = "DE"
+        IDLE = "ID"
+
     id = models.AutoField(db_column='HfID', primary_key=True)
     uuid = models.CharField(
         db_column='HfUUID', max_length=36, default=uuid.uuid4, unique=True)
@@ -216,6 +222,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     audit_user_id = models.IntegerField(db_column='AuditUserID')
     contract_start_date = models.DateTimeField(db_column='ContractStartDate', blank=True, null=True)
     contract_end_date = models.DateTimeField(db_column='ContractEndDate', blank=True, null=True)
+    status = models.CharField(max_length=2, choices=Status.choices, default=Status.ACTIVE)
 
     def __str__(self):
         return self.code + " " + self.name
