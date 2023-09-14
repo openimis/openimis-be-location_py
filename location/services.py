@@ -116,13 +116,13 @@ class LocationService:
             pass
         elif loc_type in ['R', 'D']:
             raise PermissionDenied(_(
-                "unauthorized to create or update region and district"
+                "unauthorized_to_create_update_region_district"
             ))
         elif not self.user.has_perms(
                 LocationConfig.gql_mutation_create_locations_perms
         ):
             raise PermissionDenied(_(
-                "unauthorized to create or update municipalities and villages"
+                "unauthorized_to_create_or_update_municipalities_and_villages"
             ))
 
     @staticmethod
@@ -170,7 +170,7 @@ class HealthFacilityService:
         if hf_uuid:
             hf = HealthFacility.objects.get(uuid=hf_uuid)
             if hf.validity_to:
-                raise ValidationError(_("Cannot update historical hf."))
+                raise ValidationError(_("cannot_update_historical_hf"))
             prev_hf_id = hf.save_history()
             # reset the non required fields
             # (each update is 'complete', necessary to be able to set 'null')
