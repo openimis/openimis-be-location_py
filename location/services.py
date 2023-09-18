@@ -116,13 +116,13 @@ class LocationService:
             pass
         elif loc_type in ['R', 'D']:
             raise PermissionDenied(_(
-                "unauthorized to create or update region and district"
+                "unauthorized_to_create_update_region_district"
             ))
         elif not self.user.has_perms(
                 LocationConfig.gql_mutation_create_locations_perms
         ):
             raise PermissionDenied(_(
-                "unauthorized to create or update municipalities and villages"
+                "unauthorized_to_create_or_update_municipalities_and_villages"
             ))
 
     @staticmethod
@@ -155,6 +155,9 @@ class HealthFacilityService:
     def update_or_create(self, data):
         contract_start_date = data.get("contract_start_date", None)
         contract_end_date = data.get("contract_end_date", None)
+        if LocationConfig.health_facility_contract_dates_mandatory:
+            if not contract_start_date or not contract_end_date:
+                raise ValidationError(_("mutation.contract_dates_required"))
         if bool(contract_start_date) ^ bool(contract_end_date):
             raise ValidationError(_("mutation.single_date_hf_contract"))
         if contract_start_date and contract_end_date and contract_end_date <= contract_start_date:
@@ -170,7 +173,7 @@ class HealthFacilityService:
         if hf_uuid:
             hf = HealthFacility.objects.get(uuid=hf_uuid)
             if hf.validity_to:
-                raise ValidationError(_("Cannot update historical hf."))
+                raise ValidationError(_("cannot_update_historical_hf"))
             prev_hf_id = hf.save_history()
             # reset the non required fields
             # (each update is 'complete', necessary to be able to set 'null')
