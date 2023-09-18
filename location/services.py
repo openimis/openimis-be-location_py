@@ -155,6 +155,9 @@ class HealthFacilityService:
     def update_or_create(self, data):
         contract_start_date = data.get("contract_start_date", None)
         contract_end_date = data.get("contract_end_date", None)
+        if LocationConfig.health_facility_contract_dates_mandatory:
+            if not contract_start_date or not contract_end_date:
+                raise ValidationError(_("mutation.contract_dates_required"))
         if bool(contract_start_date) ^ bool(contract_end_date):
             raise ValidationError(_("mutation.single_date_hf_contract"))
         if contract_start_date and contract_end_date and contract_end_date <= contract_start_date:
