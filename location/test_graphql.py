@@ -320,12 +320,13 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
             mutation {{
               createHealthFacility(input: {{
                 clientMutationId:"{client_mutation_id}",
-                code:"{code}",
-                name:"{name}",
-                legalFormId:"{legal_form.code}",
-                level:"{level}",
-                locationId:{location.id},
-                careType: "{care_type}",
+                clientMutationLabel: "Create Health Facility {name}"
+                code:"{code}"
+                name:"{name}"
+                legalFormId:"{legal_form.code}"
+                level:"{level}"
+                locationId:{location.id}
+                careType: "{care_type}"
               }}) {{
                 internalId
                 clientMutationId
