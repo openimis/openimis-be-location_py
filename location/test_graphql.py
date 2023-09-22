@@ -343,7 +343,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
 
         self.assertEqual(content["data"]["createHealthFacility"]["clientMutationId"], client_mutation_id)
 
-        db_hf = HealthFacility.objects.get(code=code)
+        db_hf = HealthFacility.objects.filter(code=code, validity_to__isnull=True).get()
         self.assertIsNotNone(db_hf)
         self.assertEqual(db_hf.name, name)
         self.assertEqual(db_hf.code, code)
