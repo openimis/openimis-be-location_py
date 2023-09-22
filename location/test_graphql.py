@@ -319,7 +319,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         query = f"""
             mutation {{
               createHealthFacility(input: {{
-                clientMutationId:"{client_mutation_id}",
+                clientMutationId:"{client_mutation_id}"
                 clientMutationLabel: "Create Health Facility {name}"
                 code:"{code}"
                 name:"{name}"
