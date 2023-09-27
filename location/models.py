@@ -220,8 +220,8 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     offline = models.BooleanField(db_column='OffLine', default=False)
     # row_id = models.BinaryField(db_column='RowID', blank=True, null=True)
     audit_user_id = models.IntegerField(db_column='AuditUserID')
-    contract_start_date = models.DateTimeField(db_column='ContractStartDate', blank=True, null=True)
-    contract_end_date = models.DateTimeField(db_column='ContractEndDate', blank=True, null=True)
+    contract_start_date = models.DateField(db_column='ContractStartDate', blank=True, null=True)
+    contract_end_date = models.DateField(db_column='ContractEndDate', blank=True, null=True)
     status = models.CharField(max_length=2, choices=Status.choices, default=Status.ACTIVE)
 
     def __str__(self):
