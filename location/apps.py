@@ -28,7 +28,7 @@ DEFAULT_CFG = {
             "display": "Hospital",
         },
     ],
-    "health_facility_contract_dates_mandatory": True
+    "health_facility_contract_dates_mandatory": False
 }
 
 
