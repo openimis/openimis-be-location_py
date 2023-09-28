@@ -1,4 +1,5 @@
 from functools import reduce
+from django.core.cache import cache
 import uuid
 
 from core import filter_validity
@@ -299,11 +300,13 @@ class UserDistrict(core_models.VersionedModel):
 
     @classmethod
     def get_user_districts(cls, user):
+        
         """
         Retrieve the list of UserDistricts for a user, the locations are prefetched on two levels.
         :param user: InteractiveUser to filter on
         :return: UserDistrict *objects*
         """
+        qs = cache.get('user_disctrict_'+user.id)
         if user.is_superuser is True:
             return (
                 UserDistrict.objects
@@ -329,7 +332,7 @@ class UserDistrict(core_models.VersionedModel):
                 logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
                                "We'll return an empty list, but it should be handled before reaching here.")
             return UserDistrict.objects.none()
-        return (
+        qs =  (
             UserDistrict.objects.filter(location__type='D')
             .filter(location__validity_to__isnull=True)
             .select_related("location")
@@ -349,6 +352,8 @@ class UserDistrict(core_models.VersionedModel):
             .order_by("location__code")
             .exclude(location__parent__isnull=True)
         )
+        cache.set('user_disctrict_'+user.id, qs, 600)
+
 
     @classmethod
     def get_user_locations(cls, user):
