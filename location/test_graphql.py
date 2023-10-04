@@ -9,7 +9,7 @@ from django.core import exceptions
 from graphene_django.utils.testing import GraphQLTestCase
 from graphql_jwt.shortcuts import get_token
 from location.models import Location, HealthFacility, HealthFacilityLegalForm
-from location.test_helpers import create_test_location, assign_user_districts
+from location.test_helpers import create_test_location, assign_user_districts,create_test_village
 from rest_framework import status
 
 
@@ -34,12 +34,12 @@ class LocationGQLTestCase(GraphQLTestCase):
     test_ward = None
     test_location_delete = None
     @classmethod
-    def setUpTestDate(cls):
-        if self.test_region is None:
-            self.test_village  =create_test_village( custom_props={"code":self._TEST_VILLAGE_CODE,"name":self._TEST_VILLAGE_NAME})
-            self.test_ward =self.test_village.parent
-            self.test_region =self.test_village.parent.parent.parent
-            self.test_district = self.test_village.parent.parent
+    def setUpTestData(cls):
+        if cls.test_region is None:
+            cls.test_village  =create_test_village()
+            cls.test_ward =cls.test_village.parent
+            cls.test_region =cls.test_village.parent.parent.parent
+            cls.test_district = cls.test_village.parent.parent
         cls.admin_user = create_test_interactive_user(username="testLocationAdmin")
         cls.admin_token = get_token(cls.admin_user, DummyContext(user=cls.admin_user))
         cls.noright_user = create_test_interactive_user(username="testLocationNoRight", roles=[1])
