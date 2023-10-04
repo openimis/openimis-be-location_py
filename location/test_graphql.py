@@ -28,10 +28,18 @@ class LocationGQLTestCase(GraphQLTestCase):
     # is shown as an error in the IDE, so leaving it as True.
     GRAPHQL_SCHEMA = True
     admin_user = None
-
+    test_region = None
+    test_district = None
+    test_village = None
+    test_ward = None
+    test_location_delete = None
     @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    def setUpTestDate(cls):
+        if self.test_region is None:
+            self.test_village  =create_test_village( custom_props={"code":self._TEST_VILLAGE_CODE,"name":self._TEST_VILLAGE_NAME})
+            self.test_ward =self.test_village.parent
+            self.test_region =self.test_village.parent.parent.parent
+            self.test_district = self.test_village.parent.parent
         cls.admin_user = create_test_interactive_user(username="testLocationAdmin")
         cls.admin_token = get_token(cls.admin_user, DummyContext(user=cls.admin_user))
         cls.noright_user = create_test_interactive_user(username="testLocationNoRight", roles=[1])
@@ -39,10 +47,6 @@ class LocationGQLTestCase(GraphQLTestCase):
         cls.admin_dist_user = create_test_interactive_user(username="testLocationDist")
         assign_user_districts(cls.admin_dist_user, ["R1D1", "R2D1", "R2D2"])
         cls.admin_dist_token = get_token(cls.admin_dist_user, DummyContext(user=cls.admin_dist_user))
-        cls.test_region = create_test_location('R')
-        cls.test_district = create_test_location('D', custom_props={"parent_id": cls.test_region.id})
-        cls.test_ward = create_test_location('W', custom_props={"parent_id": cls.test_district.id})
-        cls.test_village = create_test_location('V', custom_props={"parent_id": cls.test_ward.id})
         cls.test_location_delete = create_test_location('V', custom_props={"code": "TODEL", "name": "To delete",
                                                                            "parent_id": cls.test_ward.id})
 
