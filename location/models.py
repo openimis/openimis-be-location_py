@@ -307,7 +307,7 @@ class UserDistrict(core_models.VersionedModel):
         :return: UserDistrict *objects*
         """
         qs = cache.get('user_disctrict_'+str(user.id))
-        if qs:
+        if not qs:
             if user.is_superuser is True:
                 return (
                     UserDistrict.objects
