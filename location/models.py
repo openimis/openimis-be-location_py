@@ -177,7 +177,7 @@ class HealthFacilitySubLevel(models.Model):
 
 
 class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
-    class Status(models.TextChoices):
+    class HealthFacilityStatus(models.TextChoices):
         ACTIVE = "AC"
         INACTIVE = "IN"
         DELISTED = "DE"
@@ -223,7 +223,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     audit_user_id = models.IntegerField(db_column='AuditUserID')
     contract_start_date = models.DateField(db_column='ContractStartDate', blank=True, null=True)
     contract_end_date = models.DateField(db_column='ContractEndDate', blank=True, null=True)
-    status = models.CharField(max_length=2, choices=Status.choices, default=Status.ACTIVE)
+    status = models.CharField(max_length=2, choices=HealthFacilityStatus.choices, default=HealthFacilityStatus.ACTIVE)
 
     def __str__(self):
         return self.code + " " + self.name
