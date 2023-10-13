@@ -189,7 +189,7 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
                 return queryset.filter(reduce((lambda x, y: x | y), filters))
         return queryset
 
-    def build_user_location_filter_query( user: core_models.InteractiveUser) -> Q:
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser):
         return LocationManager().build_user_location_filter_query( user)
 
 
