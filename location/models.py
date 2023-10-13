@@ -15,7 +15,7 @@ logger = logging.getLogger(__file__)
 
 
 class LocationManager(models.Manager):
-    def parents(self, location_id):
+    def parents(self, location_id, loc_type = None):
         parents = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
@@ -41,9 +41,10 @@ class LocationManager(models.Manager):
         """,
             (location_id,),
         )
-        return self.filter(id__in=[x.id for x in parents])
+        return get_location_from_ids(parents, loc_type)
 
-    def children(self, location_id):
+
+    def children(self, location_id, loc_type=None):
         children = Location.objects.raw(
             f"""
                 WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_CHILDREN AS (
@@ -71,8 +72,14 @@ class LocationManager(models.Manager):
             """,
             (location_id,),
         )
-        return self.filter(id__in=[x.id for x in children])
+        return get_location_from_ids(children, loc_type)
 
+    
+    def get_location_from_ids(list_id, loc_type):
+        qs = self.filter(id__in=[x.id for x in list_id])
+        if loc_type:
+            qs = qs.filter(type=loc_type)
+        return qs 
 
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
@@ -175,13 +182,13 @@ class HealthFacilitySubLevel(models.Model):
         managed = True
         db_table = 'tblHFSublevel'
 
+class Status(models.TextChoices):
+    ACTIVE = "AC"
+    INACTIVE = "IN"
+    DELISTED = "DE"
+    IDLE = "ID"
 
 class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
-    class Status(models.TextChoices):
-        ACTIVE = "AC"
-        INACTIVE = "IN"
-        DELISTED = "DE"
-        IDLE = "ID"
 
     id = models.AutoField(db_column='HfID', primary_key=True)
     uuid = models.CharField(
@@ -315,10 +322,6 @@ class UserDistrict(core_models.VersionedModel):
                     .filter(location__type='D')
                 )
             elif user.is_imis_admin:
-                # TODO: Use 'distinct()' when it is supported by MSSQL or if PostgreSQL becomes the sole database.
-                distinct_districts_codes = UserDistrict.objects.all().values_list('location__code')
-                usd_list = list(set(item[0] for item in distinct_districts_codes))
-                user_district_ids = []
                 for code in usd_list:
                     user_district = UserDistrict.objects.filter(location__code=code).first()
                     user_district_ids.append(user_district.id)
