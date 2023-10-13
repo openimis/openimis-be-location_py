@@ -41,7 +41,7 @@ class LocationManager(models.Manager):
         """,
             (location_id,),
         )
-        return get_location_from_ids(parents, loc_type)
+        return self.get_location_from_ids(parents, loc_type)
 
     def get_locations_allowed(self, user_id):
         location_allowed = Location.objects.raw(
@@ -98,10 +98,10 @@ class LocationManager(models.Manager):
             """,
             (location_id,),
         )
-        return get_location_from_ids(children, loc_type)
+        return self.get_location_from_ids(children, loc_type)
     
 
-    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='', loc_type=None) -> Q:
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='', loc_type=None):
         if user.is_imis_admin:
             q_allowed_location = cache.get(f"q_allowed_locations_{str(user_id)}")
             if q_allowed_location is None:
