@@ -114,6 +114,7 @@ class LocationManager(models.Manager):
                         (f"{prefix}location__isnull",True)
                     )
                 cache.set(f"q_allowed_locations_{str(user.id)}", q_allowed_location, 600)
+
             return q_allowed_location
 
 
