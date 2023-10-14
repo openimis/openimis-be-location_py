@@ -113,7 +113,7 @@ class LocationManager(models.Manager):
                 q_allowed_location =  Q((f"{prefix}location_id__in", *[allowed_locations_id])) | Q(
                         (f"{prefix}location__isnull",True)
                     )
-                cache.seet(f"q_allowed_locations_{str(user.id)}", q_allowed_location, 600)
+                cache.set(f"q_allowed_locations_{str(user.id)}", q_allowed_location, 600)
             return q_allowed_location
 
 
