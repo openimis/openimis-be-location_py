@@ -101,20 +101,17 @@ class LocationManager(models.Manager):
         return self.get_location_from_ids(children, loc_type)
     
 
-    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='', loc_type=None):
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', loc_type=None):
         if user.is_imis_admin:
             q_allowed_location = cache.get(f"q_allowed_locations_{str(user.id)}")
             if q_allowed_location is None:
-            
                 allowed_locations = self.get_locations_allowed(user.id)
-                filtered_locations = list(filter(lambda l: loc_type is None or l.type == loc_type,allowed_locations))
-                allowed_locations_id = [l.id for l in filtered_locations]
-                    
-                q_allowed_location =  Q((f"{prefix}location_id__in", *[allowed_locations_id])) | Q(
-                        (f"{prefix}location__isnull",True)
-                    )
                 cache.set(f"q_allowed_locations_{str(user.id)}", q_allowed_location, 600)
-
+            filtered_locations = list(filter(lambda l: loc_type is None or l.type == loc_type,allowed_locations))
+            allowed_locations_id = [l.id for l in filtered_locations]
+            q_allowed_location =  Q((f"{prefix}_id__in", *[allowed_locations_id])) | Q(
+                    (f"{prefix}__isnull",True)
+                )
             return q_allowed_location
 
 
