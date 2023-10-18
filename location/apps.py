@@ -28,7 +28,7 @@ DEFAULT_CFG = {
             "display": "Hospital",
         },
     ],
-    "health_facility_contract_dates_mandatory": True
+    "health_facility_contract_dates_mandatory": False
 }
 
 
@@ -48,7 +48,7 @@ class LocationConfig(AppConfig):
     gql_mutation_delete_health_facilities_perms = []
 
     health_facility_level = []
-    health_facility_contract_dates_mandatory = False
+    health_facility_contract_dates_mandatory = None
 
     def __load_config(self, cfg):
         for field in cfg:

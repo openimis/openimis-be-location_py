@@ -9,7 +9,7 @@ from django.core import exceptions
 from graphene_django.utils.testing import GraphQLTestCase
 from graphql_jwt.shortcuts import get_token
 from location.models import Location, HealthFacility, HealthFacilityLegalForm
-from location.test_helpers import create_test_location, assign_user_districts
+from location.test_helpers import create_test_location, assign_user_districts,create_test_village
 from rest_framework import status
 
 
@@ -28,10 +28,18 @@ class LocationGQLTestCase(GraphQLTestCase):
     # is shown as an error in the IDE, so leaving it as True.
     GRAPHQL_SCHEMA = True
     admin_user = None
-
+    test_region = None
+    test_district = None
+    test_village = None
+    test_ward = None
+    test_location_delete = None
     @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    def setUpTestData(cls):
+        if cls.test_region is None:
+            cls.test_village  =create_test_village()
+            cls.test_ward =cls.test_village.parent
+            cls.test_region =cls.test_village.parent.parent.parent
+            cls.test_district = cls.test_village.parent.parent
         cls.admin_user = create_test_interactive_user(username="testLocationAdmin")
         cls.admin_token = get_token(cls.admin_user, DummyContext(user=cls.admin_user))
         cls.noright_user = create_test_interactive_user(username="testLocationNoRight", roles=[1])
@@ -39,10 +47,6 @@ class LocationGQLTestCase(GraphQLTestCase):
         cls.admin_dist_user = create_test_interactive_user(username="testLocationDist")
         assign_user_districts(cls.admin_dist_user, ["R1D1", "R2D1", "R2D2"])
         cls.admin_dist_token = get_token(cls.admin_dist_user, DummyContext(user=cls.admin_dist_user))
-        cls.test_region = create_test_location('R')
-        cls.test_district = create_test_location('D', custom_props={"parent_id": cls.test_region.id})
-        cls.test_ward = create_test_location('W', custom_props={"parent_id": cls.test_district.id})
-        cls.test_village = create_test_location('V', custom_props={"parent_id": cls.test_ward.id})
         cls.test_location_delete = create_test_location('V', custom_props={"code": "TODEL", "name": "To delete",
                                                                            "parent_id": cls.test_ward.id})
 
@@ -319,13 +323,14 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         query = f"""
             mutation {{
               createHealthFacility(input: {{
-                clientMutationId:"{client_mutation_id}",
-                code:"{code}",
-                name:"{name}",
-                legalFormId:"{legal_form.code}",
-                level:"{level}",
-                locationId:{location.id},
-                careType: "{care_type}",
+                clientMutationId:"{client_mutation_id}"
+                clientMutationLabel: "Create Health Facility {name}"
+                code:"{code}"
+                name:"{name}"
+                legalFormId:"{legal_form.code}"
+                level:"{level}"
+                locationId:{location.id}
+                careType: "{care_type}"
               }}) {{
                 internalId
                 clientMutationId
@@ -343,7 +348,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
 
         self.assertEqual(content["data"]["createHealthFacility"]["clientMutationId"], client_mutation_id)
 
-        db_hf = HealthFacility.objects.get(code=code)
+        db_hf = HealthFacility.objects.filter(code=code, validity_to__isnull=True).first()
         self.assertIsNotNone(db_hf)
         self.assertEqual(db_hf.name, name)
         self.assertEqual(db_hf.code, code)

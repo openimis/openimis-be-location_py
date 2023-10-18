@@ -1,4 +1,5 @@
 from functools import reduce
+from django.core.cache import cache
 import uuid
 
 from core import filter_validity
@@ -14,7 +15,7 @@ logger = logging.getLogger(__file__)
 
 
 class LocationManager(models.Manager):
-    def parents(self, location_id):
+    def parents(self, location_id, loc_type = None):
         parents = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
@@ -40,9 +41,36 @@ class LocationManager(models.Manager):
         """,
             (location_id,),
         )
-        return self.filter(id__in=[x.id for x in parents])
+        return self.get_location_from_ids(parents, loc_type)
 
-    def children(self, location_id):
+    def get_locations_allowed(self, user_id):
+        location_allowed = Location.objects.raw(
+            f"""
+            WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
+            SELECT
+                "LocationId",
+                "LocationType",
+                "ParentLocationId"
+            FROM
+                "tblLocations"
+            WHERE "LocationId" in (SELECT "LocationId" FROM "tblUsersDistricts" WHERE "ValidityTo"  is Null AND "UserID" = %s)
+            UNION ALL
+
+            SELECT
+                parent."LocationId",
+                parent."LocationType",
+                parent."ParentLocationId"
+            FROM
+                "tblLocations" parent
+                INNER JOIN CTE_PARENTS leaf
+                    ON parent."LocationId" = leaf."ParentLocationId"
+            )
+            SELECT * FROM CTE_PARENTS;
+        """, (user_id,)
+        )
+        return location_allowed
+    
+    def children(self, location_id, loc_type=None):
         children = Location.objects.raw(
             f"""
                 WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_CHILDREN AS (
@@ -70,8 +98,31 @@ class LocationManager(models.Manager):
             """,
             (location_id,),
         )
-        return self.filter(id__in=[x.id for x in children])
+        return self.get_location_from_ids(children, loc_type)
+    
 
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='', loc_type=None):
+        if user.is_imis_admin:
+            q_allowed_location = cache.get(f"q_allowed_locations_{str(user.id)}")
+            if q_allowed_location is None:
+            
+                allowed_locations = self.get_locations_allowed(user.id)
+                filtered_locations = list(filter(lambda l: loc_type is None or l.type == loc_type,allowed_locations))
+                allowed_locations_id = [l.id for l in filtered_locations]
+                    
+                q_allowed_location =  Q((f"{prefix}location_id__in", *[allowed_locations_id])) | Q(
+                        (f"{prefix}location__isnull",True)
+                    )
+                cache.set(f"q_allowed_locations_{str(user.id)}", q_allowed_location, 600)
+
+            return q_allowed_location
+
+
+    def get_location_from_ids(self, list_id, loc_type):
+        qs = self.filter(id__in=[x.LocationId for x in list_id])
+        if loc_type:
+            qs = qs.filter(type=loc_type)
+        return qs 
 
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
@@ -140,13 +191,10 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
         return queryset
 
     @staticmethod
-    def build_user_location_filter_query(user: core_models.InteractiveUser) -> Q:
-        user_districts = UserDistrict.get_user_districts(user)
+    def build_user_location_filter_query( user: core_models.InteractiveUser):
+        return LocationManager().build_user_location_filter_query( user)
 
-        return Q(location__in=Location.objects.filter(uuid__in=user_districts.values_list('location__uuid', flat=True))) | Q(
-            location__in=Location.objects.filter(uuid__in=user_districts.values_list('location__parent__uuid', flat=True))) | Q(
-            location__isnull=True
-        )
+
 
     class Meta:
         managed = True
@@ -176,7 +224,7 @@ class HealthFacilitySubLevel(models.Model):
 
 
 class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
-    class Status(models.TextChoices):
+    class HealthFacilityStatus(models.TextChoices):
         ACTIVE = "AC"
         INACTIVE = "IN"
         DELISTED = "DE"
@@ -220,9 +268,9 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     offline = models.BooleanField(db_column='OffLine', default=False)
     # row_id = models.BinaryField(db_column='RowID', blank=True, null=True)
     audit_user_id = models.IntegerField(db_column='AuditUserID')
-    contract_start_date = models.DateTimeField(db_column='ContractStartDate', blank=True, null=True)
-    contract_end_date = models.DateTimeField(db_column='ContractEndDate', blank=True, null=True)
-    status = models.CharField(max_length=2, choices=Status.choices, default=Status.ACTIVE)
+    contract_start_date = models.DateField(db_column='ContractStartDate', blank=True, null=True)
+    contract_end_date = models.DateField(db_column='ContractEndDate', blank=True, null=True)
+    status = models.CharField(max_length=2, choices=HealthFacilityStatus.choices, default=HealthFacilityStatus.ACTIVE)
 
     def __str__(self):
         return self.code + " " + self.name
