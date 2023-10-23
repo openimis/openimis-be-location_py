@@ -68,7 +68,7 @@ class LocationManager(models.Manager):
             SELECT * FROM CTE_PARENTS;
         """, (user_id,)
         )
-        return location_allowed
+        return list(location_allowed)
     
     def children(self, location_id, loc_type=None):
         children = Location.objects.raw(
@@ -101,8 +101,9 @@ class LocationManager(models.Manager):
         return self.get_location_from_ids(children, loc_type)
     
 
-    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', loc_type=None):
-        if user.is_imis_admin:
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset = None, loc_type=None):
+        q_allowed_location = None
+        if not user.is_imis_admin:
             q_allowed_location = cache.get(f"q_allowed_locations_{str(user.id)}")
             if q_allowed_location is None:
                 allowed_locations = self.get_locations_allowed(user.id)
@@ -112,7 +113,14 @@ class LocationManager(models.Manager):
             q_allowed_location =  Q((f"{prefix}_id__in", *[allowed_locations_id])) | Q(
                     (f"{prefix}__isnull",True)
                 )
-            return q_allowed_location
+            
+            if queryset:
+                return queryset.filter(q_allowed_location)
+            else:
+                return q_allowed_location
+        else:
+            return queryset
+        
 
 
     def get_location_from_ids(self, list_id, loc_type):
@@ -188,8 +196,8 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
         return queryset
 
     @staticmethod
-    def build_user_location_filter_query( user: core_models.InteractiveUser):
-        return LocationManager().build_user_location_filter_query( user)
+    def build_user_location_filter_query( user: core_models.InteractiveUser, queryset = None):
+        return LocationManager().build_user_location_filter_query( user, queryset = queryset)
 
 
 
