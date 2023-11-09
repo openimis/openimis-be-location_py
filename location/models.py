@@ -19,7 +19,7 @@ class LocationManager(models.Manager):
         parents = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
-            SELECT
+            SELECT 
                 "LocationId",
                 "LocationType",
                 "ParentLocationId"
@@ -41,7 +41,7 @@ class LocationManager(models.Manager):
         """,
             (location_id,),
         )
-        return self.get_location_from_ids(parents, loc_type)
+        return self.get_location_from_ids((parents), loc_type)
 
     def get_locations_allowed(self, user_id):
         location_allowed = Location.objects.raw(
@@ -57,13 +57,13 @@ class LocationManager(models.Manager):
             UNION ALL
 
             SELECT
-                parent."LocationId",
-                parent."LocationType",
-                parent."ParentLocationId"
+                child."LocationId",
+                child."LocationType",
+                child."ParentLocationId"
             FROM
-                "tblLocations" parent
+                "tblLocations"  child
                 INNER JOIN CTE_PARENTS leaf
-                    ON parent."LocationId" = leaf."ParentLocationId"
+                    ON child."ParentLocationId" = leaf."LocationId"
             )
             SELECT * FROM CTE_PARENTS;
         """, (user_id,)
@@ -81,14 +81,14 @@ class LocationManager(models.Manager):
                     0 as "Level"
                 FROM
                     "tblLocations"
-                WHERE "ParentLocationId" = %s
+                WHERE "LocationId" = %s
                 UNION ALL
 
                 SELECT
                     child."LocationId",
                     child."LocationType",
                     child."ParentLocationId",
-                    parent."Level" + 1
+                    parent."Level" + 1 as "Level" 
                 FROM
                     "tblLocations" child
                     INNER JOIN CTE_CHILDREN parent
@@ -98,7 +98,7 @@ class LocationManager(models.Manager):
             """,
             (location_id,),
         )
-        return self.get_location_from_ids(children, loc_type)
+        return self.get_location_from_ids((children), loc_type)
     
 
     def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset = None, loc_type=None):
@@ -123,11 +123,10 @@ class LocationManager(models.Manager):
         
 
 
-    def get_location_from_ids(self, list_id, loc_type):
-        qs = self.filter(id__in=[x.LocationId for x in list_id])
+    def get_location_from_ids(self, qsr, loc_type):
         if loc_type:
-            qs = qs.filter(type=loc_type)
-        return qs 
+            return [x for x in list(qsr) if x.type == loc_type]
+        return list(qsr)
 
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
