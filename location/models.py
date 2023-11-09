@@ -87,7 +87,7 @@ class LocationManager(models.Manager):
                 SELECT
                     child."LocationId",
                     child."LocationType",
-                    child."ParentLocationId"
+                    child."ParentLocationId",
                     parent."Level" + 1 as "Level" 
                 FROM
                     "tblLocations" child
