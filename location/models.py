@@ -16,27 +16,26 @@ logger = logging.getLogger(__file__)
 
 class LocationManager(models.Manager):
     def parents(self, location_id, loc_type = None):
-        use_column_name = True
         parents = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
             SELECT 
-                "LocationId"{"" if use_column_name else " as id"},
-                "LocationType"{"" if use_column_name else " as type"},
-                "ParentLocationId"{"" if use_column_name else " as parent_id"}
+                "LocationId",
+                "LocationType",
+                "ParentLocationId"
             FROM
                 "tblLocations"
             WHERE "LocationId" = %s
             UNION ALL
 
             SELECT
-                parent."LocationId"{"" if use_column_name else " as id"},
-                parent."LocationType"{"" if use_column_name else " as type"},
-                parent."ParentLocationId"{"" if use_column_name else " as parent_id"}
+                parent."LocationId",
+                parent."LocationType",
+                parent."ParentLocationId"
             FROM
                 "tblLocations" parent
                 INNER JOIN CTE_PARENTS leaf
-                    ON parent."LocationId" = leaf.{"ParentLocationId" if use_column_name else "parent_id"}
+                    ON parent."LocationId" = leaf."ParentLocationId"
             )
             SELECT * FROM CTE_PARENTS;
         """,
@@ -45,27 +44,26 @@ class LocationManager(models.Manager):
         return self.get_location_from_ids((parents), loc_type)
 
     def get_locations_allowed(self, user_id):
-        use_column_name = True
         location_allowed = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
             SELECT
-                "LocationId"{"" if use_column_name else " as id"},
-                "LocationType"{"" if use_column_name else " as type"},
-                "ParentLocationId"{"" if use_column_name else " as parent_id"}
+                "LocationId",
+                "LocationType",
+                "ParentLocationId"
             FROM
                 "tblLocations"
             WHERE "LocationId" in (SELECT "LocationId" FROM "tblUsersDistricts" WHERE "ValidityTo"  is Null AND "UserID" = %s)
             UNION ALL
 
             SELECT
-                child."LocationId"{"" if use_column_name else " as id"},
-                child."LocationType"{"" if use_column_name else " as type"},
-                child."ParentLocationId"{"" if use_column_name else " as parent_id"}
+                child."LocationId",
+                child."LocationType",
+                child."ParentLocationId"
             FROM
                 "tblLocations"  child
                 INNER JOIN CTE_PARENTS leaf
-                    ON child."ParentLocationId" = leaf.{"LocationId" if use_column_name else "id"}
+                    ON child."ParentLocationId" = leaf."LocationId"
             )
             SELECT * FROM CTE_PARENTS;
         """, (user_id,)
@@ -73,14 +71,13 @@ class LocationManager(models.Manager):
         return list(location_allowed)
     
     def children(self, location_id, loc_type=None):
-        use_column_name = True
         children = Location.objects.raw(
             f"""
                 WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_CHILDREN AS (
                 SELECT
-                    "LocationId"{"" if use_column_name else " as id"},
-                    "LocationType"{"" if use_column_name else " as type"},
-                    "ParentLocationId"{"" if use_column_name else " as parent_id"},
+                    "LocationId",
+                    "LocationType",
+                    "ParentLocationId",
                     0 as "Level"
                 FROM
                     "tblLocations"
@@ -88,14 +85,14 @@ class LocationManager(models.Manager):
                 UNION ALL
 
                 SELECT
-                    child."LocationId"{"" if use_column_name else " as id"},
-                    child."LocationType"{"" if use_column_name else " as type"},
-                    child."ParentLocationId"{"" if use_column_name else " as parent_id"},
+                    child."LocationId",
+                    child."LocationType",
+                    child."ParentLocationId"
                     parent."Level" + 1 as "Level" 
                 FROM
                     "tblLocations" child
                     INNER JOIN CTE_CHILDREN parent
-                        ON child."ParentLocationId" = parent.{"LocationId" if use_column_name else "id"}
+                        ON child."ParentLocationId" = parent."LocationId"
                 )
                 SELECT * FROM CTE_CHILDREN;
             """,
