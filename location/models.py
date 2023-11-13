@@ -19,7 +19,7 @@ class LocationManager(models.Manager):
         parents = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
-            SELECT
+            SELECT 
                 "LocationId",
                 "LocationType",
                 "ParentLocationId"
@@ -81,14 +81,14 @@ class LocationManager(models.Manager):
                     0 as "Level"
                 FROM
                     "tblLocations"
-                WHERE "ParentLocationId" = %s
+                WHERE "LocationId" = %s
                 UNION ALL
 
                 SELECT
                     child."LocationId",
                     child."LocationType",
                     child."ParentLocationId",
-                    parent."Level" + 1
+                    parent."Level" + 1 as "Level" 
                 FROM
                     "tblLocations" child
                     INNER JOIN CTE_CHILDREN parent
