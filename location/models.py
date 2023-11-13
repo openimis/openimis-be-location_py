@@ -41,7 +41,7 @@ class LocationManager(models.Manager):
         """,
             (location_id,),
         )
-        return self.get_location_from_ids((parents), loc_type)
+        return self.get_location_from_ids(parents, loc_type)
 
     def get_locations_allowed(self, user_id):
         location_allowed = Location.objects.raw(
@@ -57,18 +57,18 @@ class LocationManager(models.Manager):
             UNION ALL
 
             SELECT
-                child."LocationId",
-                child."LocationType",
-                child."ParentLocationId"
+                parent."LocationId",
+                parent."LocationType",
+                parent."ParentLocationId"
             FROM
-                "tblLocations"  child
+                "tblLocations" parent
                 INNER JOIN CTE_PARENTS leaf
-                    ON child."ParentLocationId" = leaf."LocationId"
+                    ON parent."LocationId" = leaf."ParentLocationId"
             )
             SELECT * FROM CTE_PARENTS;
         """, (user_id,)
         )
-        return list(location_allowed)
+        return location_allowed
     
     def children(self, location_id, loc_type=None):
         children = Location.objects.raw(
@@ -98,35 +98,31 @@ class LocationManager(models.Manager):
             """,
             (location_id,),
         )
-        return self.get_location_from_ids((children), loc_type)
+        return self.get_location_from_ids(children, loc_type)
     
 
-    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset = None, loc_type=None):
-        q_allowed_location = None
-        if not user.is_imis_admin:
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='', loc_type=None):
+        if user.is_imis_admin:
             q_allowed_location = cache.get(f"q_allowed_locations_{str(user.id)}")
             if q_allowed_location is None:
-                allowed_locations = self.get_locations_allowed(user.id)
-                cache.set(f"q_allowed_locations_{str(user.id)}", q_allowed_location, 600)
-            filtered_locations = list(filter(lambda l: loc_type is None or l.type == loc_type,allowed_locations))
-            allowed_locations_id = [l.id for l in filtered_locations]
-            q_allowed_location =  Q((f"{prefix}_id__in", *[allowed_locations_id])) | Q(
-                    (f"{prefix}__isnull",True)
-                )
             
-            if queryset:
-                return queryset.filter(q_allowed_location)
-            else:
-                return q_allowed_location
-        else:
-            return queryset
-        
+                allowed_locations = self.get_locations_allowed(user.id)
+                filtered_locations = list(filter(lambda l: loc_type is None or l.type == loc_type,allowed_locations))
+                allowed_locations_id = [l.id for l in filtered_locations]
+                    
+                q_allowed_location =  Q((f"{prefix}location_id__in", *[allowed_locations_id])) | Q(
+                        (f"{prefix}location__isnull",True)
+                    )
+                cache.set(f"q_allowed_locations_{str(user.id)}", q_allowed_location, 600)
+
+            return q_allowed_location
 
 
-    def get_location_from_ids(self, qsr, loc_type):
+    def get_location_from_ids(self, list_id, loc_type):
+        qs = self.filter(id__in=[x.LocationId for x in list_id])
         if loc_type:
-            return [x for x in list(qsr) if x.type == loc_type]
-        return list(qsr)
+            qs = qs.filter(type=loc_type)
+        return qs 
 
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
@@ -195,8 +191,8 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
         return queryset
 
     @staticmethod
-    def build_user_location_filter_query( user: core_models.InteractiveUser, queryset = None):
-        return LocationManager().build_user_location_filter_query( user, queryset = queryset)
+    def build_user_location_filter_query( user: core_models.InteractiveUser):
+        return LocationManager().build_user_location_filter_query( user)
 
 
 
