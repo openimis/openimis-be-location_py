@@ -5,6 +5,7 @@ from core.schema import OrderedDjangoFilterConnectionField
 from core.schema import signal_mutation_module_validate
 from django.utils.translation import gettext as _
 from graphene_django.filter import DjangoFilterConnectionField
+
 from .gql_mutations import *
 from .gql_queries import *
 from .models import *
@@ -66,7 +67,7 @@ class Query(graphene.ObjectType):
         if not show_history:
             query = HealthFacility.filter_queryset(query)
 
-        query = LocationManager().build_user_location_filter_query(info.context.user._u, queryset = query)
+        query = query.filter(Location.build_user_location_filter_query(info.context.user._u))
 
         return gql_optimizer.query(query.all(), info)
 
