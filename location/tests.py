@@ -1,5 +1,6 @@
 from django.test import TestCase
 from location.test_helpers import create_test_village, create_test_location
+
 from location.models import LocationManager
 from core.services import create_or_update_interactive_user, create_or_update_core_user, create_or_update_user_districts
 
@@ -52,3 +53,4 @@ class LocationTest(TestCase):
         other = create_test_location('D',  custom_props={'parent':self.test_village.parent.parent.parent, 'code':'NOTALLO'})
         allowed = LocationManager().allowed(self.test_user.id, loc_types = ['R','D','W'])
         self.assertEqual(len(allowed),2)
+
