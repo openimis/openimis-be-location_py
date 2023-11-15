@@ -106,7 +106,7 @@ class LocationManager(models.Manager):
 
     def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset = None, loc_types=['R','D','W','V']):
         q_allowed_location = None
-        if  user.is_imis_admin:
+        if not user.is_imis_admin:
             q_allowed_location =  Q((f"{prefix}__in",  self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull",True))
 
             if queryset:
