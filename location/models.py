@@ -50,9 +50,9 @@ class LocationManager(models.Manager):
             WITH {"" if settings.MSSQL else "RECURSIVE"} USER_LOC AS (SELECT l."LocationId", l."ParentLocationId" FROM "tblUsersDistricts" ud JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"  WHERE ud."ValidityTo"  is Null AND "UserID" = %s ),
              CTE_PARENTS AS (
             SELECT
-                child."LocationId",
-                child."LocationType",
-                child."ParentLocationId"
+                parent."LocationId",
+                parent."LocationType",
+                parent."ParentLocationId"
             FROM
                 "tblLocations" parent
             WHERE "LocationId" in (SELECT "LocationId" FROM USER_LOC) 
