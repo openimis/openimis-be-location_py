@@ -43,16 +43,15 @@ class LocationManager(models.Manager):
         )       
         return self.get_location_from_ids((parents), loc_type)  if loc_type else parents
 
-
     def allowed(self, user_id, loc_types = ['R', 'D', 'W', 'V'], strict = True):
         location_allowed = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} USER_LOC AS (SELECT l."LocationId", l."ParentLocationId" FROM "tblUsersDistricts" ud JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"  WHERE ud."ValidityTo"  is Null AND "UserID" = %s ),
              CTE_PARENTS AS (
             SELECT
-                parent."LocationId",
-                parent."LocationType",
-                parent."ParentLocationId"
+                child."LocationId",
+                child."LocationType",
+                child."ParentLocationId"
             FROM
                 "tblLocations" parent
             WHERE "LocationId" in (SELECT "LocationId" FROM USER_LOC) 
