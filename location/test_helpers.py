@@ -18,8 +18,8 @@ def assign_user_districts(user, district_codes):
         )
 
 
-def create_test_location(hf_type, valid=True, custom_props={}):
-    code= "TST-" + hf_type
+def create_test_location(loc_type, valid=True, custom_props={}):
+    code= "TST-" + loc_type
     if custom_props is not None and 'code' in custom_props:
         code = custom_props.pop('code')
     location = Location.objects.filter(code=code, validity_to__isnull= not valid).first()
@@ -29,8 +29,8 @@ def create_test_location(hf_type, valid=True, custom_props={}):
         return Location.objects.create(
             **{
                 "code": code,
-                "type": hf_type,
-                "name": "Test location " + hf_type,
+                "type": loc_type,
+                "name": "Test location " + loc_type,
                 "validity_from": "2019-06-01",
                 "validity_to": None if valid else "2019-06-01",
                 "audit_user_id": -1,
