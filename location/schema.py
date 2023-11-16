@@ -126,10 +126,8 @@ class Query(graphene.ObjectType):
 
         if (kwargs.get('ignore_location') == False or kwargs.get('ignore_location') is None):
 
-          if settings.ROW_SECURITY:
-              dist = UserDistrict.get_user_districts(info.context.user._u)
-
-              filters += [Q(location__id__in=[l.location_id for l in dist])]
+          if settings.ROW_SECURITY and not info.context.user._u.is_imis_admin:
+              filters += [LocationManager().build_user_location_filter_query(info.context.user._u, loc_types= ['D'])]
         return HealthFacility.objects.filter(*filters)
 
     def resolve_user_districts(self, info, **kwargs):

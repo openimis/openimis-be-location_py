@@ -277,12 +277,8 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
             queryset = cls.filter_queryset(queryset)
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
-        if settings.ROW_SECURITY:
-            dist = UserDistrict.get_user_districts(user._u)
-            if dist:
-                return queryset.filter(
-                    location_id__in=[l.location_id for l in dist]
-                )
+        if settings.ROW_SECURITY and not user._u.is_imis_admin:
+            return  LocationManager().build_user_location_filter_query(self.user._u, queryset = queryset, loc_types = ['D'])
         return queryset
 
     class Meta:
