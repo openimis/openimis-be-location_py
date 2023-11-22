@@ -53,6 +53,7 @@ class LocationManager(models.Manager):
                 parent."LocationId",
                 parent."LocationType",
                 parent."ParentLocationId"
+
             FROM
                 "tblLocations" parent
             WHERE "LocationId" in (SELECT "LocationId" FROM USER_LOC) 
