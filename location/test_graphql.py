@@ -88,7 +88,28 @@ class LocationGQLTestCase(GraphQLTestCase):
             ''',
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        content = json.loads(response.content)
 
+        self.assertResponseNoErrors(response)
+
+        self.assertEqual(content["data"]["createHealthFacility"]["clientMutationId"], client_mutation_id)
+
+        db_hf = HealthFacility.objects.filter(code=code, validity_to__isnull=True).first()
+        self.assertIsNotNone(db_hf)
+        self.assertEqual(db_hf.name, name)
+        self.assertEqual(db_hf.code, code)
+        self.assertEqual(db_hf.legal_form, legal_form)
+        self.assertEqual(db_hf.level, level)
+        self.assertEqual(db_hf.location, location)
+        self.assertEqual(db_hf.care_type, care_type)
+
+        retrieved_item = self._getHFFromAPI(code=code)
+        self.assertIsNotNone(retrieved_item)
+        self.assertEqual(retrieved_item["name"], db_hf.name)
+        self.assertEqual(retrieved_item["code"], db_hf.code)
+
+    
         self.assertEquals(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
 
@@ -398,3 +419,27 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
 
         with self.assertRaises(exceptions.ObjectDoesNotExist):
             HealthFacility.objects.get(code=code)
+
+    def test_basic_HF_query(self):
+        response = self.query(
+            '''
+            query{
+              healthFacilities(first: 10)
+              {
+                totalCount
+                pageInfo { hasNextPage, hasPreviousPage, startCursor, endCursor}
+                edges
+                {
+                  node
+                  {
+                    id,uuid,code,accCode,name,careType,phone,fax,email,level,legalForm{code},location{code,name, parent{code, name}},validityFrom,validityTo,clientMutationId
+                  }
+                }
+              }
+            }
+            ''',
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+        )
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        content = json.loads(response.content)
+        self.assertResponseNoErrors(response)
