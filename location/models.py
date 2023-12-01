@@ -41,7 +41,6 @@ class LocationManager(models.Manager):
         """,
             (location_id,),
         )       
-        return self.get_location_from_ids((parents), loc_type)  if loc_type else parents
 
 
     def allowed(self, user_id, loc_types = ['R', 'D', 'W', 'V'], strict = True):
@@ -433,7 +432,7 @@ class OfficerVillage(core_models.VersionedModel):
 
     @classmethod
     def get_queryset(cls, queryset, user):
-        if isinstance(user, ResolveInfo):
+        if isinstance(user,    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset = None, loc_types=['R','D','W','V']) ResolveInfo):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
