@@ -1,6 +1,7 @@
 import base64
 import json
 from dataclasses import dataclass
+import uuid
 
 from core.models import User
 from core.test_helpers import create_test_interactive_user
@@ -9,7 +10,7 @@ from django.core import exceptions
 from graphene_django.utils.testing import GraphQLTestCase
 from graphql_jwt.shortcuts import get_token
 from location.models import Location, HealthFacility, HealthFacilityLegalForm
-from location.test_helpers import create_test_location, assign_user_districts,create_test_village
+from location.test_helpers import create_test_health_facility, create_test_location, assign_user_districts,create_test_village
 from rest_framework import status
 
 
@@ -282,6 +283,17 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         assign_user_districts(cls.admin_dist_user, ["R1D1", "R2D1", "R2D2"])
         cls.admin_dist_token = get_token(cls.admin_dist_user, DummyContext(user=cls.admin_dist_user))
 
+        if cls.test_region is None:
+            cls.test_village = create_test_village()
+            cls.test_ward = cls.test_village.parent
+            cls.test_district = cls.test_ward.parent
+            cls.test_region = cls.test_district.parent
+
+        # Create the test HF with the code - TEST-MDF
+        if cls.test_hf is None:
+            cls.test_hf = create_test_health_facility("MDF", cls.test_district.id, valid=True)
+        
+
     def _getHFFromAPI(self, code):
         """
         Utility method that fetches HF from GraphQL whose code matches the given parameter.
@@ -398,3 +410,27 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
 
         with self.assertRaises(exceptions.ObjectDoesNotExist):
             HealthFacility.objects.get(code=code)
+
+    def test_mutation_modify_health_facility(self):
+        """
+        This method tests if an existing health facility can be modified
+        """
+
+        client_mutation_id = uuid.uuid4()
+        client_mutation_label = "Update health facility MDF"
+
+        query = f"""
+            mutation {{            
+                updateHealthFacility(
+                input: {{clientMutationId: "{client_mutation_id}", clientMutationLabel: "{client_mutation_label}", uuid: "{self.test_hf.uuid}", code: "{self.test_hf.code}", name: "{self.test_hf.name}", locationId: {self.test_hf.location.id}, level: "{self.test_hf.level}", legalFormId: "{self.test_hf.legal_form}", careType: "{self.test_hf.care_type}", accCode: "{self.test_hf.acc_code}", address: "{self.test_hf.address}", phone: "0123456789", status: "AC"}}
+            ) {{
+                clientMutationId
+                internalId
+                }}
+            }}
+
+            """
+        
+        response = self.query(query, headers= {"HTTP_AUTHORIZATION" : f"Bearer {self.admin_token}"},)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
