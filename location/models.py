@@ -287,7 +287,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
         managed = True
         db_table = 'tblHF'
 
-    LEVEL_HEALTH_CENTERgit push origin +HEAD = 'C'
+    LEVEL_HEALTH_CENTER = 'C'
     LEVEL_DISPENSARY = 'D'
     LEVEL_HOSPITAL = 'H'
 
