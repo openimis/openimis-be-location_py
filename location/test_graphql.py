@@ -271,10 +271,13 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
     # is shown as an error in the IDE, so leaving it as True.
     GRAPHQL_SCHEMA = True
     admin_user = None
+    test_region = None
+    test_hf = None
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        
         cls.admin_user = create_test_interactive_user(username="testHFAdmin")
         cls.admin_token = get_token(cls.admin_user, DummyContext(user=cls.admin_user))
         cls.noright_user = create_test_interactive_user(username="testHFNoRight", roles=[1])
