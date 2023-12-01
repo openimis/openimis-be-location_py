@@ -162,7 +162,7 @@ class HealthFacilityService:
             raise ValidationError(_("mutation.single_date_hf_contract"))
         if contract_start_date and contract_end_date and contract_end_date <= contract_start_date:
             raise ValidationError(_("mutation.incorrect_hf_contract_date_range"))
-        if 'status' in data and data['status'] not in [s[0] for s in  HealthFacility.status.field.choices]:
+        if 'status' in data and data['status'] not in HealthFacility.HealthFacilityStatus:
             raise ValidationError(_("mutation.incorrect_hf_status"))
         hf_uuid = data.pop('uuid') if 'uuid' in data else None
         catchments = data.pop('catchments') if 'catchments' in data else []
