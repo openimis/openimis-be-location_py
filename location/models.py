@@ -44,7 +44,6 @@ class LocationManager(models.Manager):
         return self.get_location_from_ids((parents), loc_type)  if loc_type else parents
 
 
-
     def allowed(self, user_id, loc_types = ['R', 'D', 'W', 'V'], strict = True):
         location_allowed = Location.objects.raw(
             f"""
@@ -280,7 +279,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
         if settings.ROW_SECURITY and not user._u.is_imis_admin:
-            return  LocationManager().build_user_location_filter_query(self.user._u, queryset = queryset, loc_types = ['D'])
+            return  LocationManager().build_user_location_filter_query(user._u, queryset = queryset, loc_types = ['D'])
         return queryset
 
     class Meta:

@@ -87,8 +87,7 @@ class LocationGQLTestCase(GraphQLTestCase):
             }
             ''',
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
-        )
-
+        )   
         self.assertEquals(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
 
@@ -398,3 +397,27 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
 
         with self.assertRaises(exceptions.ObjectDoesNotExist):
             HealthFacility.objects.get(code=code)
+
+    def test_basic_HF_query(self):
+        response = self.query(
+            '''
+            query{
+              healthFacilities(first: 10)
+              {
+                totalCount
+                pageInfo { hasNextPage, hasPreviousPage, startCursor, endCursor}
+                edges
+                {
+                  node
+                  {
+                    id,uuid,code,accCode,name,careType,phone,fax,email,level,legalForm{code},location{code,name, parent{code, name}},validityFrom,validityTo,clientMutationId
+                  }
+                }
+              }
+            }
+            ''',
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+        )
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        content = json.loads(response.content)
+        self.assertResponseNoErrors(response)
