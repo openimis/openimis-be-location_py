@@ -44,6 +44,7 @@ class LocationManager(models.Manager):
         return self.get_location_from_ids((parents), loc_type)  if loc_type else parents
 
 
+
     def allowed(self, user_id, loc_types = ['R', 'D', 'W', 'V'], strict = True):
         location_allowed = Location.objects.raw(
             f"""
@@ -286,7 +287,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
         managed = True
         db_table = 'tblHF'
 
-    LEVEL_HEALTH_CENTER = 'C'
+    LEVEL_HEALTH_CENTERgit push origin +HEAD = 'C'
     LEVEL_DISPENSARY = 'D'
     LEVEL_HOSPITAL = 'H'
 
@@ -433,7 +434,7 @@ class OfficerVillage(core_models.VersionedModel):
 
     @classmethod
     def get_queryset(cls, queryset, user):
-        if isinstance(user, ResolveInfo):
+        if isinstance(user,    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset = None, loc_types=['R','D','W','V']) ResolveInfo):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
