@@ -1,4 +1,5 @@
 from functools import reduce
+import django
 from django.core.cache import cache
 import uuid
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__file__)
 
 
 class LocationManager(models.Manager):
-    def parents(self, location_id, loc_type = None):
+    def parents(self, location_id, loc_type=None):
         parents = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
@@ -40,13 +41,12 @@ class LocationManager(models.Manager):
             SELECT * FROM CTE_PARENTS;
         """,
             (location_id,),
-        )       
-        return self.get_location_from_ids((parents), loc_type)  if loc_type else parents
+        )
+        return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
-
-    def allowed(self, user_id, loc_types = ['R', 'D', 'W', 'V'], strict = True):
-        location_allowed = Location.objects.raw(
-            f"""
+    def allowed(self, user_id, loc_types=['R', 'D', 'W', 'V'], strict=True):
+        # location_allowed = Location.objects.raw(
+        raw_sql = f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} USER_LOC AS (SELECT l."LocationId", l."ParentLocationId" FROM "tblUsersDistricts" ud JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"  WHERE ud."ValidityTo"  is Null AND "UserID" = %s ),
              CTE_PARENTS AS (
             SELECT
@@ -70,10 +70,15 @@ class LocationManager(models.Manager):
                     ON child."ParentLocationId" = leaf."LocationId"
             )
             SELECT DISTINCT * FROM CTE_PARENTS WHERE "LocationType" in ('{"','".join(loc_types)}');
-        """, (user_id,)
-        )
-        return list(location_allowed)
-    
+        """
+        with django.db.connection.cursor() as cursor:
+            cursor.execute(raw_sql, [user_id])
+            rows = cursor.fetchall()
+
+        location_allowed = Location.objects.filter(id__in=[row[0] for row in rows])
+
+        return location_allowed
+
     def children(self, location_id, loc_type=None):
         children = Location.objects.raw(
             f"""
@@ -103,18 +108,18 @@ class LocationManager(models.Manager):
             (location_id,),
         )
         return self.get_location_from_ids((children), loc_type) if loc_type else children
-    
 
-    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset = None, loc_types=['R','D','W','V']):
+
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset=None, loc_types=['R', 'D', 'W', 'V']):
         q_allowed_location = None
-        if not isinstance(user,core_models.InteractiveUser ):
+        if not isinstance(user, core_models.InteractiveUser):
             logger.warning(f"Access without filter for user {user.id} ")
             if queryset:
                 return queryset
             else:
-                return Q() 
-        elif not user.is_imis_admin :
-            q_allowed_location =  Q((f"{prefix}__in",  self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull",True))
+                return Q()
+        elif not user.is_imis_admin:
+            q_allowed_location = Q((f"{prefix}__in", self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull", True))
 
             if queryset:
                 return queryset.filter(q_allowed_location)
@@ -125,7 +130,7 @@ class LocationManager(models.Manager):
                 return queryset
             else:
                 return Q()
-        
+
 
 
     def get_location_from_ids(self, qsr, loc_type):
@@ -133,7 +138,7 @@ class LocationManager(models.Manager):
             return [x for x in list(qsr) if x.type == loc_type]
         return list(qsr)
 
-    
+
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
 
@@ -187,15 +192,15 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
                 return ClaimAdmin.objects \
                     .filter(code=user.username, has_login=True, validity_to__isnull=True) \
                     .get().officer_allowed_locations
-            elif  user.is_imis_admin:
+            elif user.is_imis_admin:
                 return Location.objects
             else:
-                return cls.objects.allowed(user)
+                return cls.objects.allowed(user.i_user_id)
         return queryset
 
     @staticmethod
-    def build_user_location_filter_query( cls, user: core_models.InteractiveUser, queryset = None):
-        return cls.objects.build_user_location_filter_query( user, queryset = queryset)
+    def build_user_location_filter_query(cls, user: core_models.InteractiveUser, queryset=None):
+        return cls.objects.build_user_location_filter_query(user, queryset=queryset)
 
     class Meta:
         managed = True
@@ -288,7 +293,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
         if settings.ROW_SECURITY and not user._u.is_imis_admin:
-            return  LocationManager().build_user_location_filter_query(user._u, queryset = queryset, loc_types = ['D'])
+            return LocationManager().build_user_location_filter_query(user._u, queryset=queryset, loc_types=['D'])
         return queryset
 
     class Meta:
