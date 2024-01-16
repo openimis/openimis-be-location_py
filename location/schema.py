@@ -5,7 +5,6 @@ from core.schema import OrderedDjangoFilterConnectionField
 from core.schema import signal_mutation_module_validate
 from django.utils.translation import gettext as _
 from graphene_django.filter import DjangoFilterConnectionField
-
 from .gql_mutations import *
 from .gql_queries import *
 from .models import *
@@ -67,7 +66,7 @@ class Query(graphene.ObjectType):
         if not show_history:
             query = HealthFacility.filter_queryset(query)
 
-        query = query.filter(Location.build_user_location_filter_query(info.context.user._u))
+        query = LocationManager().build_user_location_filter_query(info.context.user._u, queryset = query)
 
         return gql_optimizer.query(query.all(), info)
 
@@ -127,10 +126,8 @@ class Query(graphene.ObjectType):
 
         if (kwargs.get('ignore_location') == False or kwargs.get('ignore_location') is None):
 
-          if settings.ROW_SECURITY:
-              dist = UserDistrict.get_user_districts(info.context.user._u)
-
-              filters += [Q(location__id__in=[l.location_id for l in dist])]
+          if settings.ROW_SECURITY and not info.context.user._u.is_imis_admin:
+              filters += [LocationManager().build_user_location_filter_query(info.context.user._u, loc_types= ['D'])]
         return HealthFacility.objects.filter(*filters)
 
     def resolve_user_districts(self, info, **kwargs):

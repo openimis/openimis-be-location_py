@@ -27,7 +27,8 @@ DEFAULT_CFG = {
             "code": "H",
             "display": "Hospital",
         },
-    ]
+    ],
+    "health_facility_contract_dates_mandatory": False
 }
 
 
@@ -47,48 +48,18 @@ class LocationConfig(AppConfig):
     gql_mutation_delete_health_facilities_perms = []
 
     health_facility_level = []
+    health_facility_contract_dates_mandatory = None
 
-    def _configure_permissions(self, cfg):
-        LocationConfig.location_types = cfg[
-            "location_types"]
-        LocationConfig.gql_query_locations_perms = cfg[
-            "gql_query_locations_perms"]
-        LocationConfig.gql_query_health_facilities_perms = cfg[
-            "gql_query_health_facilities_perms"]
-        LocationConfig.gql_mutation_create_locations_perms = cfg[
-            "gql_mutation_create_locations_perms"
-        ]
-        LocationConfig.gql_mutation_create_region_locations_perms = cfg[
-            "gql_mutation_create_region_locations_perms"
-        ]
-        LocationConfig.gql_mutation_edit_locations_perms = cfg[
-            "gql_mutation_edit_locations_perms"
-        ]
-        LocationConfig.gql_mutation_delete_locations_perms = cfg[
-            "gql_mutation_delete_locations_perms"
-        ]
-        LocationConfig.gql_mutation_move_location_perms = cfg[
-            "gql_mutation_move_location_perms"
-        ]
-        LocationConfig.gql_mutation_create_health_facilities_perms = cfg[
-            "gql_query_health_facilities_perms"
-        ]
-        LocationConfig.gql_mutation_edit_health_facilities_perms = cfg[
-            "gql_query_health_facilities_perms"
-        ]
-        LocationConfig.gql_mutation_delete_health_facilities_perms = cfg[
-            "gql_query_health_facilities_perms"
-        ]
-
-    def _configure_coding(self, cfg):
-        LocationConfig.health_facility_level = cfg["health_facility_level"]
+    def __load_config(self, cfg):
+        for field in cfg:
+            if hasattr(LocationConfig, field):
+                setattr(LocationConfig, field, cfg[field])
 
     def ready(self):
         from core.models import ModuleConfiguration
 
         cfg = ModuleConfiguration.get_or_default(MODULE_NAME, DEFAULT_CFG)
-        self._configure_permissions(cfg)
-        self._configure_coding(cfg)
+        self.__load_config(cfg)
 
     def set_dataloaders(self, dataloaders):
         from .dataloaders import LocationLoader, HealthFacilityLoader

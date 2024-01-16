@@ -1,9 +1,11 @@
-import datetime
 import json
+from typing import Union
+from uuid import UUID
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db.models import Q
 from django.utils.translation import gettext as _
 
 from core.signals import register_service_signal
@@ -26,7 +28,24 @@ def check_authentication(function):
     return wrapper
 
 
-class HealthFacilityLevel(object):
+def get_ancestor_location_filter(ancestor_uuid: Union[str, UUID], location_field='location', levels=4) -> Q:
+    """
+    A generic service that return a Q object that can be used to filter if a model belongs to a location
+    or any of its children.
+
+    :param ancestor_uuid: UUID of the target location
+    :param location_field: The name of the location field in the filtered model
+    :param levels: The number of location levels to search up. Should not change until location rework.
+    :return: Q object that checks parent locations "levels" levels deep
+    """
+    filters = Q(**{location_field + '__uuid': ancestor_uuid, location_field + '__validity_to__isnull': True})
+    for i in range(1, levels):
+        filters = filters | Q(**{location_field + '__parent' * i + '__uuid': ancestor_uuid,
+                                 location_field + '__parent' * i + '__validity_to__isnull': True})
+    return filters
+
+
+class HealthFacilityLevel:
     def __init__(self, user):
         self.user = user
 
@@ -91,19 +110,19 @@ class LocationService:
 
     def _check_users_locations_rights(self, loc_type):
         if self.user.is_superuser \
-            or self.user.has_perms(
-                    LocationConfig.gql_mutation_create_region_locations_perms
-                ):
+                or self.user.has_perms(
+            LocationConfig.gql_mutation_create_region_locations_perms
+        ):
             pass
         elif loc_type in ['R', 'D']:
             raise PermissionDenied(_(
-                "unauthorized to create or update region and district"
+                "unauthorized_to_create_update_region_district"
             ))
         elif not self.user.has_perms(
                 LocationConfig.gql_mutation_create_locations_perms
         ):
             raise PermissionDenied(_(
-                "unauthorized to create or update municipalities and villages"
+                "unauthorized_to_create_or_update_municipalities_and_villages"
             ))
 
     @staticmethod
@@ -134,6 +153,17 @@ class HealthFacilityService:
 
     @register_service_signal('health_facility_service.update_or_create')
     def update_or_create(self, data):
+        contract_start_date = data.get("contract_start_date", None)
+        contract_end_date = data.get("contract_end_date", None)
+        if LocationConfig.health_facility_contract_dates_mandatory:
+            if not contract_start_date or not contract_end_date:
+                raise ValidationError(_("mutation.contract_dates_required"))
+        if bool(contract_start_date) ^ bool(contract_end_date):
+            raise ValidationError(_("mutation.single_date_hf_contract"))
+        if contract_start_date and contract_end_date and contract_end_date <= contract_start_date:
+            raise ValidationError(_("mutation.incorrect_hf_contract_date_range"))
+        if 'status' in data and data['status'] not in HealthFacility.HealthFacilityStatus:
+            raise ValidationError(_("mutation.incorrect_hf_status"))
         hf_uuid = data.pop('uuid') if 'uuid' in data else None
         catchments = data.pop('catchments') if 'catchments' in data else []
         # address may be multiline > sent as JSON
@@ -143,7 +173,7 @@ class HealthFacilityService:
         if hf_uuid:
             hf = HealthFacility.objects.get(uuid=hf_uuid)
             if hf.validity_to:
-                raise ValidationError(_("Cannot update historical hf."))
+                raise ValidationError(_("cannot_update_historical_hf"))
             prev_hf_id = hf.save_history()
             # reset the non required fields
             # (each update is 'complete', necessary to be able to set 'null')

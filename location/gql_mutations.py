@@ -7,6 +7,8 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils.translation import gettext as _
 from graphene import InputObjectType
+from django.core.cache import cache
+
 import copy
 
 from .services import LocationService, HealthFacilityService
@@ -155,6 +157,7 @@ class DeleteLocationMutation(OpenIMISMutation):
 
     @classmethod
     def __delete_user_districts(cls, location: Location, location_delete_date=None):
+        
         if location_delete_date is None:
             from core import datetime
             location_delete_date = datetime.datetime.now()
@@ -162,6 +165,8 @@ class DeleteLocationMutation(OpenIMISMutation):
         UserDistrict.objects\
             .filter(location=location, validity_to__isnull=True)\
             .update(validity_to=location_delete_date)
+        cache.delete('user_disctrict_'+user.id)
+
 
 
 def tree_reset_types(parent, location, new_level):
@@ -248,6 +253,9 @@ class HealthFacilityInputType(OpenIMISMutation.Input):
     items_pricelist_id = graphene.Int(required=False)
     offline = graphene.Boolean(required=False)
     catchments = graphene.List(HealthFacilityCatchmentInputType, required=False)
+    contract_start_date = graphene.Date(required=False)
+    contract_end_date = graphene.Date(required=False)
+    status = graphene.String(required=False)
 
 
 def update_or_create_health_facility(data, user):
