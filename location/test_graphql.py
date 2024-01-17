@@ -41,7 +41,7 @@ class LocationGQLTestCase(GraphQLTestCase):
             cls.test_ward =cls.test_village.parent
             cls.test_region =cls.test_village.parent.parent.parent
             cls.test_district = cls.test_village.parent.parent
-        cls.admin_user = create_test_interactive_user(username="testLocationAdmin")
+        cls.admin_user = create_test_interactive_user(username="testLocationAdmin", roles=[7])
         cls.admin_token = get_token(cls.admin_user, DummyContext(user=cls.admin_user))
         cls.noright_user = create_test_interactive_user(username="testLocationNoRight", roles=[1])
         cls.noright_token = get_token(cls.noright_user, DummyContext(user=cls.noright_user))
@@ -256,7 +256,26 @@ class LocationGQLTestCase(GraphQLTestCase):
 
         self.assertResponseNoErrors(response)
         self.assertEqual(content["data"]["deleteLocation"]["clientMutationId"], "testlocation5")
-
+        ## check the mutation answer
+        response = self.query('''
+        {
+        mutationLogs(clientMutationId: "testlocation5")
+        {
+            
+        pageInfo { hasNextPage, hasPreviousPage, startCursor, endCursor}
+        edges
+        {
+        node
+        {
+            id,status,error,clientMutationId,clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
+        }
+        }
+        }
+        }
+            ''',
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"})
+        self.assertResponseNoErrors(response)
+        
         self.test_location_delete.refresh_from_db()
 
         self.assertIsNotNone(self.test_location_delete.validity_to)
@@ -456,6 +475,42 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
             }
             ''',
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+        )
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        content = json.loads(response.content)
+        self.assertResponseNoErrors(response)
+        
+    def test_user_districts_admin(self):
+        
+        response = self.query(
+            '''
+            query
+                {
+                userDistricts
+                {
+                    id,uuid,code,name,parent{id, uuid, code, name}
+                }
+                }
+            ''',
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+        )
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        content = json.loads(response.content)
+        self.assertResponseNoErrors(response)
+
+    def test_user_districts_not_admin(self):
+        
+        response = self.query(
+            '''
+            query
+                {
+                userDistricts
+                {
+                    id,uuid,code,name,parent{id, uuid, code, name}
+                }
+                }
+            ''',
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.noright_token}"},
         )
         self.assertEquals(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)

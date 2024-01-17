@@ -354,50 +354,38 @@ class UserDistrict(core_models.VersionedModel):
         :param user: InteractiveUser to filter on
         :return: UserDistrict *objects*
         """
-        if user.is_superuser is True:
-            return (
-                UserDistrict.objects
-                .filter(*filter_validity())
-                .filter(location__type='D')
-            )
-        elif hasattr(user, "is_imis_admin") and user.is_imis_admin:
-            # TODO: Use 'distinct()' when it is supported by MSSQL or if PostgreSQL becomes the sole database.
-            distinct_districts_codes = UserDistrict.objects.all().values_list('location__code')
-            usd_list = list(set(item[0] for item in distinct_districts_codes))
-            user_district_ids = []
-            for code in usd_list:
-                user_district = UserDistrict.objects.filter(location__code=code).first()
-                user_district_ids.append(user_district.id)
-            return (
-                UserDistrict.objects
-                .filter(*filter_validity())
-                .filter(location__type='D')
-                .filter(id__in=user_district_ids)
-            )
-        if not isinstance(user, core_models.InteractiveUser):
+
+        if user.is_superuser is True or (hasattr(user, "is_imis_admin") and user.is_imis_admin):
+            all_districts = Location.objects.filter(type='D', *filter_validity())
+            districts = []
+            idx = 0 
+            for d in  all_districts:
+                districts.append(
+                    UserDistrict(
+                        id=idx,
+                        user=user,
+                        location=d
+                    )
+                )
+            
+            return districts
+
+        elif not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
                 logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
                                "We'll return an empty list, but it should be handled before reaching here.")
             return UserDistrict.objects.none()
-        return (
-            UserDistrict.objects.filter(location__type='D')
-            .filter(location__validity_to__isnull=True)
-            .select_related("location")
-            .only(
-                "location__id",
-                "location__uuid",
-                "location__code",
-                "location__name",
-                "location__type",
-                "location__parent_id",
-                "location__parent__code",
-            )
-            .prefetch_related("location__parent")
-            .filter(user=user)
-            .filter(*filter_validity())
-            .order_by("location__parent__code")
-            .order_by("location__code")
-            .exclude(location__parent__isnull=True)
+        else:
+            return (
+            UserDistrict.objects
+                .filter(location__type='D')
+                .filter(*filter_validity())
+                .filter(*filter_validity(prefix='location__'))
+                .filter(user=user)
+                .prefetch_related("location")
+                .prefetch_related("location__parent")
+                .order_by("location__parent__code")
+                .order_by("location__code")
         )
 
     @classmethod
