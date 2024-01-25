@@ -77,7 +77,7 @@ class LocationManager(models.Manager):
             location_allowed = Location.objects.filter( id__in =RawSQL( query,(user_id,)))
         
         else:
-            location_allowed = RawSQL( query,(user_id,))
+            location_allowed = Location.objects.raw( query,(user_id,))
 
         return location_allowed
 
