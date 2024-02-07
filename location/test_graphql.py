@@ -46,7 +46,7 @@ class LocationGQLTestCase(GraphQLTestCase):
         cls.noright_user = create_test_interactive_user(username="testLocationNoRight", roles=[1])
         cls.noright_token = get_token(cls.noright_user, DummyContext(user=cls.noright_user))
         cls.admin_dist_user = create_test_interactive_user(username="testLocationDist")
-        assign_user_districts(cls.admin_dist_user, ["R1D1", "R2D1", "R2D2"])
+        assign_user_districts(cls.noright_user, ["R1D1", "R2D1", "R2D2"])
         cls.admin_dist_token = get_token(cls.admin_dist_user, DummyContext(user=cls.admin_dist_user))
         cls.test_location_delete = create_test_location('V', custom_props={"code": "TODEL", "name": "To delete",
                                                                            "parent_id": cls.test_ward.id})
@@ -301,7 +301,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         cls.noright_user = create_test_interactive_user(username="testHFNoRight", roles=[1])
         cls.noright_token = get_token(cls.noright_user, DummyContext(user=cls.noright_user))
         cls.admin_dist_user = create_test_interactive_user(username="testHFDist")
-        assign_user_districts(cls.admin_dist_user, ["R1D1", "R2D1", "R2D2"])
+        assign_user_districts(cls.noright_user, ["R1D1", "R2D1", "R2D2"])
         cls.admin_dist_token = get_token(cls.admin_dist_user, DummyContext(user=cls.admin_dist_user))
 
         if cls.test_region is None:
@@ -443,7 +443,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         query = f"""
             mutation {{            
                 updateHealthFacility(
-                input: {{clientMutationId: "{client_mutation_id}", clientMutationLabel: "{client_mutation_label}", uuid: "{self.test_hf.uuid}", code: "{self.test_hf.code}", name: "{self.test_hf.name}", locationId: {self.test_hf.location.id}, level: "{self.test_hf.level}", legalFormId: "{self.test_hf.legal_form}", careType: "{self.test_hf.care_type}", accCode: "{self.test_hf.acc_code}", address: "{self.test_hf.address}", phone: "0123456789", status: "AC"}}
+                input: {{clientMutationId: "{client_mutation_id}", clientMutationLabel: "{client_mutation_label}", uuid: "{self.test_hf.uuid}", code: "{self.test_hf.code}", name: "{self.test_hf.name}", locationId: {self.test_hf.location.id}, level: "{self.test_hf.level}", legalFormId: "{self.test_hf.legal_form.code}", careType: "{self.test_hf.care_type}", accCode: "{self.test_hf.acc_code}", address: "{self.test_hf.address}", phone: "0123456789", status: "AC"}}
             ) {{
                 clientMutationId
                 internalId
@@ -509,6 +509,35 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
                     id,uuid,code,name,parent{id, uuid, code, name}
                 }
                 }
+            ''',
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.noright_token}"},
+        )
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        content = json.loads(response.content)
+        self.assertResponseNoErrors(response)
+        
+    def test_location_not_admin(self):
+        
+        response = self.query(
+            '''
+        query
+    {
+      locations(
+    type: "D",
+    orderBy: "code"
+  )
+      {
+        
+    pageInfo { hasNextPage, hasPreviousPage, startCursor, endCursor}
+    edges
+    {
+      node
+      {
+        id,uuid,type,code,name,malePopulation,femalePopulation,otherPopulation,families,clientMutationId
+      }
+    }
+      }
+    }
             ''',
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.noright_token}"},
         )

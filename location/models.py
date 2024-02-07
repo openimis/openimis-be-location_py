@@ -6,6 +6,7 @@ import uuid
 from core import filter_validity
 from django.conf import settings
 from django.db import models
+from django.db.models.expressions import RawSQL
 from core import models as core_models
 from graphql import ResolveInfo
 from .apps import LocationConfig
@@ -44,9 +45,8 @@ class LocationManager(models.Manager):
         )
         return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
-    def allowed(self, user_id, loc_types=['R', 'D', 'W', 'V'], strict=True):
-        # location_allowed = Location.objects.raw(
-        raw_sql = f"""
+    def allowed(self, user_id, loc_types=['R', 'D', 'W', 'V'], strict=True, qs = False):
+        query = f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} USER_LOC AS (SELECT l."LocationId", l."ParentLocationId" FROM "tblUsersDistricts" ud JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"  WHERE ud."ValidityTo"  is Null AND "UserID" = %s ),
              CTE_PARENTS AS (
             SELECT
@@ -69,13 +69,15 @@ class LocationManager(models.Manager):
                 INNER JOIN CTE_PARENTS leaf
                     ON child."ParentLocationId" = leaf."LocationId"
             )
-            SELECT DISTINCT * FROM CTE_PARENTS WHERE "LocationType" in ('{"','".join(loc_types)}');
+            SELECT DISTINCT "LocationId" FROM CTE_PARENTS WHERE "LocationType" in ('{"','".join(loc_types)}')
         """
-        with django.db.connection.cursor() as cursor:
-            cursor.execute(raw_sql, [user_id])
-            rows = cursor.fetchall()
-
-        location_allowed = Location.objects.filter(id__in=[row[0] for row in rows])
+        
+        if qs:
+            #location_allowed = Location.objects.filter( id__in =[obj.id for obj in Location.objects.raw( query,(user_id,))])
+            location_allowed = Location.objects.filter( id__in =RawSQL( query,(user_id,)))
+        
+        else:
+            location_allowed = Location.objects.raw( query,(user_id,))
 
         return location_allowed
 
@@ -195,7 +197,7 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
             elif user.is_imis_admin:
                 return Location.objects
             else:
-                return cls.objects.allowed(user.i_user_id)
+                return cls.objects.allowed(user.i_user_id, qs = True)
         return queryset
 
     @staticmethod

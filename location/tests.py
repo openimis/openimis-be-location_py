@@ -47,10 +47,10 @@ class LocationTest(TestCase):
         self.assertEqual(len(district),1)
         
     def test_allowed_location(self):
-        allowed = LocationManager().allowed(self.test_user.id, loc_types = ['R','D','W'])
+        allowed = LocationManager().allowed(self.test_user.id, loc_types = ['R','D','W'], qs = True)
         self.assertEqual(len(allowed),3)
 
         other = create_test_location('D',  custom_props={'parent':self.test_village.parent.parent.parent, 'code':'NOTALLO'})
-        allowed = LocationManager().allowed(self.test_user.id, loc_types = ['R','D','W'])
+        allowed = LocationManager().allowed(self.test_user.id, loc_types = ['R','D','W'],qs = True)
         self.assertEqual(len(allowed),2)
 
