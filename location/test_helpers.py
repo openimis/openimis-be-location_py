@@ -49,7 +49,7 @@ def create_test_village(custom_props={}):
     return test_village
 
 def create_test_health_facility(code, location_id, valid=True, custom_props={}):
-    code= "TST-" + code
+    code= ("TST-" + code) if len(code)<5 else code
     if custom_props is not None and 'code' in custom_props:
         code = custom_props.pop('code')
     hf = HealthFacility.objects.filter(code=code, validity_to__isnull= not valid).first()
