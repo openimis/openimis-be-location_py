@@ -5,6 +5,7 @@ import uuid
 from core import filter_validity
 from django.conf import settings
 from django.db import models
+from django.db.models.expressions import RawSQL
 from core import models as core_models
 from graphql import ResolveInfo
 from .apps import LocationConfig
@@ -15,7 +16,7 @@ logger = logging.getLogger(__file__)
 
 
 class LocationManager(models.Manager):
-    def parents(self, location_id, loc_type = None):
+    def parents(self, location_id, loc_type=None):
         parents = Location.objects.raw(
             f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} CTE_PARENTS AS (
@@ -40,13 +41,11 @@ class LocationManager(models.Manager):
             SELECT * FROM CTE_PARENTS;
         """,
             (location_id,),
-        )       
-        return self.get_location_from_ids((parents), loc_type)  if loc_type else parents
+        )
+        return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
-
-    def allowed(self, user_id, loc_types = ['R', 'D', 'W', 'V'], strict = True):
-        location_allowed = Location.objects.raw(
-            f"""
+    def allowed(self, user_id, loc_types=['R', 'D', 'W', 'V'], strict=True, qs = False):
+        query = f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} USER_LOC AS (SELECT l."LocationId", l."ParentLocationId" FROM "tblUsersDistricts" ud JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"  WHERE ud."ValidityTo"  is Null AND "UserID" = %s ),
              CTE_PARENTS AS (
             SELECT
@@ -69,11 +68,18 @@ class LocationManager(models.Manager):
                 INNER JOIN CTE_PARENTS leaf
                     ON child."ParentLocationId" = leaf."LocationId"
             )
-            SELECT DISTINCT * FROM CTE_PARENTS WHERE "LocationType" in ('{"','".join(loc_types)}');
-        """, (user_id,)
-        )
-        return list(location_allowed)
-    
+            SELECT DISTINCT "LocationId" FROM CTE_PARENTS WHERE "LocationType" in ('{"','".join(loc_types)}')
+        """
+        
+        if qs:
+            #location_allowed = Location.objects.filter( id__in =[obj.id for obj in Location.objects.raw( query,(user_id,))])
+            location_allowed = Location.objects.filter( id__in =RawSQL( query,(user_id,)))
+        
+        else:
+            location_allowed = Location.objects.raw( query,(user_id,))
+
+        return location_allowed
+
     def children(self, location_id, loc_type=None):
         children = Location.objects.raw(
             f"""
@@ -103,18 +109,18 @@ class LocationManager(models.Manager):
             (location_id,),
         )
         return self.get_location_from_ids((children), loc_type) if loc_type else children
-    
 
-    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset = None, loc_types=['R','D','W','V']):
+
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset=None, loc_types=['R', 'D', 'W', 'V']):
         q_allowed_location = None
-        if not isinstance(user,core_models.InteractiveUser ):
+        if not isinstance(user, core_models.InteractiveUser):
             logger.warning(f"Access without filter for user {user.id} ")
             if queryset:
                 return queryset
             else:
-                return Q() 
-        elif not user.is_imis_admin :
-            q_allowed_location =  Q((f"{prefix}__in",  self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull",True))
+                return Q()
+        elif not user.is_imis_admin:
+            q_allowed_location = Q((f"{prefix}__in", self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull", True))
 
             if queryset:
                 return queryset.filter(q_allowed_location)
@@ -125,7 +131,7 @@ class LocationManager(models.Manager):
                 return queryset
             else:
                 return Q()
-        
+
 
 
     def get_location_from_ids(self, qsr, loc_type):
@@ -133,7 +139,7 @@ class LocationManager(models.Manager):
             return [x for x in list(qsr) if x.type == loc_type]
         return list(qsr)
 
-    
+
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
     objects = LocationManager()
 
@@ -187,15 +193,15 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
                 return ClaimAdmin.objects \
                     .filter(code=user.username, has_login=True, validity_to__isnull=True) \
                     .get().officer_allowed_locations
-            elif  user.is_imis_admin:
+            elif user.is_imis_admin:
                 return Location.objects
             else:
-                return cls.objects.allowed(user)
+                return cls.objects.allowed(user.i_user_id, qs = True)
         return queryset
 
     @staticmethod
-    def build_user_location_filter_query( cls, user: core_models.InteractiveUser, queryset = None):
-        return cls.objects.build_user_location_filter_query( user, queryset = queryset)
+    def build_user_location_filter_query(cls, user: core_models.InteractiveUser, queryset=None):
+        return cls.objects.build_user_location_filter_query(user, queryset=queryset)
 
     class Meta:
         managed = True
@@ -288,7 +294,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
         if settings.ROW_SECURITY and not user._u.is_imis_admin:
-            return  LocationManager().build_user_location_filter_query(user._u, queryset = queryset, loc_types = ['D'])
+            return LocationManager().build_user_location_filter_query(user._u, queryset=queryset, loc_types=['D'])
         return queryset
 
     class Meta:
@@ -349,50 +355,38 @@ class UserDistrict(core_models.VersionedModel):
         :param user: InteractiveUser to filter on
         :return: UserDistrict *objects*
         """
-        if user.is_superuser is True:
-            return (
-                UserDistrict.objects
-                .filter(*filter_validity())
-                .filter(location__type='D')
-            )
-        elif hasattr(user, "is_imis_admin") and user.is_imis_admin:
-            # TODO: Use 'distinct()' when it is supported by MSSQL or if PostgreSQL becomes the sole database.
-            distinct_districts_codes = UserDistrict.objects.all().values_list('location__code')
-            usd_list = list(set(item[0] for item in distinct_districts_codes))
-            user_district_ids = []
-            for code in usd_list:
-                user_district = UserDistrict.objects.filter(location__code=code).first()
-                user_district_ids.append(user_district.id)
-            return (
-                UserDistrict.objects
-                .filter(*filter_validity())
-                .filter(location__type='D')
-                .filter(id__in=user_district_ids)
-            )
-        if not isinstance(user, core_models.InteractiveUser):
+
+        if user.is_superuser is True or (hasattr(user, "is_imis_admin") and user.is_imis_admin):
+            all_districts = Location.objects.filter(type='D', *filter_validity())
+            districts = []
+            idx = 0 
+            for d in  all_districts:
+                districts.append(
+                    UserDistrict(
+                        id=idx,
+                        user=user,
+                        location=d
+                    )
+                )
+            
+            return districts
+
+        elif not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
                 logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
                                "We'll return an empty list, but it should be handled before reaching here.")
             return UserDistrict.objects.none()
-        return (
-            UserDistrict.objects.filter(location__type='D')
-            .filter(location__validity_to__isnull=True)
-            .select_related("location")
-            .only(
-                "location__id",
-                "location__uuid",
-                "location__code",
-                "location__name",
-                "location__type",
-                "location__parent_id",
-                "location__parent__code",
-            )
-            .prefetch_related("location__parent")
-            .filter(user=user)
-            .filter(*filter_validity())
-            .order_by("location__parent__code")
-            .order_by("location__code")
-            .exclude(location__parent__isnull=True)
+        else:
+            return (
+            UserDistrict.objects
+                .filter(location__type='D')
+                .filter(*filter_validity())
+                .filter(*filter_validity(prefix='location__'))
+                .filter(user=user)
+                .prefetch_related("location")
+                .prefetch_related("location__parent")
+                .order_by("location__parent__code")
+                .order_by("location__code")
         )
 
     @classmethod
