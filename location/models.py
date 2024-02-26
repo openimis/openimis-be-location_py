@@ -1,5 +1,4 @@
 from functools import reduce
-import django
 from django.core.cache import cache
 import uuid
 
