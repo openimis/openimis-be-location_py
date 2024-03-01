@@ -5,7 +5,8 @@ import uuid
 
 from core import filter_validity
 from django.conf import settings
-from django.db import models
+from django.db import models, connection
+
 from django.db.models.expressions import RawSQL
 from core import models as core_models
 from graphql import ResolveInfo
@@ -74,7 +75,14 @@ class LocationManager(models.Manager):
         
         if qs:
             #location_allowed = Location.objects.filter( id__in =[obj.id for obj in Location.objects.raw( query,(user_id,))])
-            location_allowed = Location.objects.filter( id__in =RawSQL( query,(user_id,)))
+            if settings.MSSQL: # MSSQL don't support WITH in subqueries 
+                    
+                with connection.cursor() as cursor:
+                    cursor.execute(query, (user_id,))
+                    ids = cursor.fetchall()
+                    location_allowed = Location.objects.filter( id__in =[x for x, in ids])
+            else:    
+                location_allowed = Location.objects.filter( id__in =RawSQL( query,(user_id,)))
         
         else:
             location_allowed = Location.objects.raw( query,(user_id,))
