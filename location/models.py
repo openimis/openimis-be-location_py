@@ -46,7 +46,7 @@ class LocationManager(models.Manager):
         )
         return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
-    def allowed(self, user_id, loc_types=['R', 'D', 'W', 'V'], strict=True, qs = False):
+    def allowed(self, user_id, loc_types=['R', 'D', 'W', 'V'], strict=True, qs=False):
         query = f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} USER_LOC AS (SELECT l."LocationId", l."ParentLocationId" FROM "tblUsersDistricts" ud JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"  WHERE ud."ValidityTo"  is Null AND "UserID" = %s ),
              CTE_PARENTS AS (
@@ -72,20 +72,20 @@ class LocationManager(models.Manager):
             )
             SELECT DISTINCT "LocationId" FROM CTE_PARENTS WHERE "LocationType" in ('{"','".join(loc_types)}')
         """
-        
-        if qs:
-            #location_allowed = Location.objects.filter( id__in =[obj.id for obj in Location.objects.raw( query,(user_id,))])
-            if settings.MSSQL: # MSSQL don't support WITH in subqueries 
-                    
+
+        if qs is not None:
+            # location_allowed = Location.objects.filter( id__in =[obj.id for obj in Location.objects.raw( query,(user_id,))])
+            if settings.MSSQL: # MSSQL don't support WITH in subqueries
+
                 with connection.cursor() as cursor:
                     cursor.execute(query, (user_id,))
                     ids = cursor.fetchall()
-                    location_allowed = Location.objects.filter( id__in =[x for x, in ids])
-            else:    
-                location_allowed = Location.objects.filter( id__in =RawSQL( query,(user_id,)))
-        
+                    location_allowed = Location.objects.filter(id__in=[x for x, in ids])
+            else:
+                location_allowed = Location.objects.filter(id__in=RawSQL(query, (user_id,)))
+
         else:
-            location_allowed = Location.objects.raw( query,(user_id,))
+            location_allowed = Location.objects.raw(query, (user_id,))
 
         return location_allowed
 
@@ -124,19 +124,19 @@ class LocationManager(models.Manager):
         q_allowed_location = None
         if not isinstance(user, core_models.InteractiveUser):
             logger.warning(f"Access without filter for user {user.id} ")
-            if queryset:
+            if queryset is not None:
                 return queryset
             else:
                 return Q()
         elif not user.is_imis_admin:
             q_allowed_location = Q((f"{prefix}__in", self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull", True))
 
-            if queryset:
+            if queryset is not None:
                 return queryset.filter(q_allowed_location)
             else:
                 return q_allowed_location
         else:
-            if queryset:
+            if queryset is not None:
                 return queryset
             else:
                 return Q()
@@ -205,7 +205,7 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
             elif user.is_imis_admin:
                 return Location.objects
             else:
-                return cls.objects.allowed(user.i_user_id, qs = True)
+                return cls.objects.allowed(user.i_user_id, qs=True)
         return queryset
 
     @staticmethod
@@ -368,8 +368,8 @@ class UserDistrict(core_models.VersionedModel):
         if user.is_superuser is True or (hasattr(user, "is_imis_admin") and user.is_imis_admin):
             all_districts = Location.objects.filter(type='D', *filter_validity())
             districts = []
-            idx = 0 
-            for d in  all_districts:
+            idx = 0
+            for d in all_districts:
                 districts.append(
                     UserDistrict(
                         id=idx,
@@ -377,7 +377,7 @@ class UserDistrict(core_models.VersionedModel):
                         location=d
                     )
                 )
-            
+
             return districts
 
         elif not isinstance(user, core_models.InteractiveUser):
@@ -387,7 +387,7 @@ class UserDistrict(core_models.VersionedModel):
             return UserDistrict.objects.none()
         else:
             return (
-            UserDistrict.objects
+                UserDistrict.objects
                 .filter(location__type='D')
                 .filter(*filter_validity())
                 .filter(*filter_validity(prefix='location__'))
@@ -396,7 +396,7 @@ class UserDistrict(core_models.VersionedModel):
                 .prefetch_related("location__parent")
                 .order_by("location__parent__code")
                 .order_by("location__code")
-        )
+            )
 
     @classmethod
     def get_user_locations(cls, user):
