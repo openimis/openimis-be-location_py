@@ -144,16 +144,16 @@ class LocationGQLTestCase(GraphQLTestCase):
 
     def test_no_auth_locations_query(self):
         """ Query without any auth token """
-        response = self.query(' query { medicalLocations { edges { node { id name } } } } ')
+        response = self.query(' query { locations { edges { node { id name } } } } ')
 
         self.assertResponseHasErrors(response)
 
     def test_no_right_locations_query(self):
-        """ Query with a valid token but not the right to perform this operation """
-        response = self.query(' query { medicalLocations { edges { node { id name } } } } ',
+        """ Query with a valid token but not the right to perform this operation, but Location are """
+        response = self.query(' query { locations { edges { node { id name } } } } ',
                               headers={"HTTP_AUTHORIZATION": f"Bearer {self.noright_token}"})
 
-        self.assertResponseHasErrors(response)
+        self.assertResponseNoErrors(response)
 
     def test_full_locations_query(self):
         response = self.query(
