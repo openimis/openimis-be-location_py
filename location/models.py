@@ -6,7 +6,6 @@ import uuid
 from core import filter_validity
 from django.conf import settings
 from django.db import models, connection
-
 from django.db.models.expressions import RawSQL
 from core import models as core_models
 from graphql import ResolveInfo
@@ -47,6 +46,7 @@ class LocationManager(models.Manager):
         return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
     def allowed(self, user_id, loc_types=['R', 'D', 'W', 'V'], strict=True, qs=False):
+
         query = f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} USER_LOC AS (SELECT l."LocationId", l."ParentLocationId" FROM "tblUsersDistricts" ud JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"  WHERE ud."ValidityTo"  is Null AND "UserID" = %s ),
              CTE_PARENTS AS (
@@ -72,7 +72,6 @@ class LocationManager(models.Manager):
             )
             SELECT DISTINCT "LocationId" FROM CTE_PARENTS WHERE "LocationType" in ('{"','".join(loc_types)}')
         """
-
         if qs is not None:
             # location_allowed = Location.objects.filter( id__in =[obj.id for obj in Location.objects.raw( query,(user_id,))])
             if settings.MSSQL: # MSSQL don't support WITH in subqueries
@@ -377,7 +376,6 @@ class UserDistrict(core_models.VersionedModel):
                         location=d
                     )
                 )
-
             return districts
 
         elif not isinstance(user, core_models.InteractiveUser):
