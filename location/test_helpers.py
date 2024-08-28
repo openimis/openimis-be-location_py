@@ -2,7 +2,8 @@ from location.models import (
     Location,
     UserDistrict,
     HealthFacility,
-    HealthFacilityLegalForm
+    HealthFacilityLegalForm,
+    HealthFacilityCatchment
 )
 
 
@@ -19,10 +20,11 @@ def assign_user_districts(user, district_codes):
 
 
 def create_test_location(loc_type, valid=True, custom_props={}):
-    code= "TST-" + loc_type
-    if custom_props is not None and 'code' in custom_props:
+    custom_props = {k: v for k, v in custom_props.items() if hasattr(Location, k)}
+    code = "TST-" + loc_type
+    if 'code' in custom_props:
         code = custom_props.pop('code')
-    location = Location.objects.filter(code=code, validity_to__isnull= not valid).first()
+    location = Location.objects.filter(code=code, validity_to__isnull=valid).first()
     if location is not None:
         return location
     else:
@@ -48,12 +50,19 @@ def create_test_village(custom_props={}):
     
     return test_village
 
+
 def create_test_health_facility(code, location_id, valid=True, custom_props={}):
-    code= ("TST-" + code) if len(code)<5 else code
+    custom_props = {k: v for k, v in custom_props.items() if hasattr(HealthFacility, k)}
+
     if custom_props is not None and 'code' in custom_props:
         code = custom_props.pop('code')
-    hf = HealthFacility.objects.filter(code=code, validity_to__isnull= not valid).first()
+    elif not code:
+        code = 'TST-HF'        
+    hf = HealthFacility.objects.filter(code=code, validity_to__isnull=valid).first()
     if hf is not None:
+        if custom_props:
+            HealthFacility.objects.filter(id=obj.id).update(**custom_props)
+            obj.refresh_from_db()
         return hf
     else:
         return HealthFacility.objects.create(
@@ -71,3 +80,17 @@ def create_test_health_facility(code, location_id, valid=True, custom_props={}):
                 **custom_props
             }
         )
+
+def create_test_health_catchment(hf, location, custom_props={}):
+    custom_props = {k: v for k, v in custom_props.items() if hasattr(HealthFacilityCatchment, k)}
+    return HealthFacilityCatchment.objects.create(
+        **{
+            "location": location,
+            "health_facility": hf,
+            "catchment": 100,
+            "validity_from": "2019-01-01",
+            "validity_to": None ,
+            "audit_user_id": -1,
+            **custom_props
+        }
+    )
