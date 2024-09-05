@@ -9,22 +9,18 @@ class Migration(migrations.Migration):
         ('location', '0015_set_managed_to_true'),
     ]
 
-    operations = []
-    try:
-        HealthFacility.objects.filter(pk__lt=10).aggregate(sum=models.Count('contract_end_date'))
-    except:
-        operations.append(
+    operations = [
         migrations.AddField(
             model_name='healthfacility',
             name='contract_end_date',
             field=models.DateTimeField(blank=True, db_column='ContractEndDate', null=True),
-        ))
-    try:
-        HealthFacility.objects.filter(pk__lt=10).aggregate(sum=models.Count('contract_start_date'))
-    except:    
-        operations.append(migrations.AddField(
+        ),
+        migrations.AddField(
             model_name='healthfacility',
             name='contract_start_date',
             field=models.DateTimeField(blank=True, db_column='ContractStartDate', null=True),
-        ))
+        )
+        ]
+
+        
 

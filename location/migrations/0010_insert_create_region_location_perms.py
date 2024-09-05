@@ -15,7 +15,7 @@ def add_rights(apps, schema_editor):
     """
     Add create_region_locations_perms to the IMIS Administrator.
     """
-    insert_role_right_for_system(IMIS_ADMINISTRATOR_ROLE_IS_SYSTEM, ROLE_RIGHT_ID)
+    insert_role_right_for_system(IMIS_ADMINISTRATOR_ROLE_IS_SYSTEM, ROLE_RIGHT_ID, apps)
 
 
 class Migration(migrations.Migration):
