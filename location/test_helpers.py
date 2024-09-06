@@ -1,3 +1,5 @@
+import string
+import random
 from location.models import (
     Location,
     UserDistrict,
@@ -5,6 +7,10 @@ from location.models import (
     HealthFacilityLegalForm,
     HealthFacilityCatchment
 )
+
+def generate_random_string(length=6):
+    letters = string.ascii_uppercase
+    return ''.join(random.choice(letters) for i in range(length))
 
 
 def assign_user_districts(user, district_codes):
@@ -45,14 +51,39 @@ def create_test_location(loc_type, valid=True, custom_props=None):
 
     
     
-def create_test_village(custom_props=None):
-    if custom_props is None:
-        custom_props = {}
-    custom_props["name"]=custom_props['name'] if "name" in custom_props else "Test Village"
-    test_region = create_test_location('R',custom_props={"name": "Region" + custom_props["name"]})
-    test_district = create_test_location('D', custom_props={"parent": test_region,"name":"District " + custom_props["name"]})
-    test_ward = create_test_location('W', custom_props={"parent": test_district,"name":"Ward" + custom_props["name"]})
-    custom_props["parent"]=test_ward
+def create_test_village(custom_props={}):
+    code = custom_props.get('code')
+    if code:
+        location = Location.objects.filter(code=code, validity_to__isnull=True).first()
+        if location:
+            return location
+
+    name = custom_props.get('name', "Test Village")
+    custom_props["name"] = name
+    test_region = create_test_location(
+        'R',
+        custom_props={
+            "name": "Region " + name,
+            "code": f"R-{generate_random_string()}",
+        }
+    )
+    test_district = create_test_location(
+        'D',
+        custom_props={
+            "parent": test_region,
+            "name":"District " + name,
+            "code": f"D-{generate_random_string()}",
+        }
+    )
+    test_ward = create_test_location(
+        'W',
+        custom_props={
+            "parent": test_district,
+            "name":"Ward " + name,
+            "code": f"W-{generate_random_string()}",
+        }
+    )
+    custom_props["parent"] = test_ward
     test_village = create_test_location('V', custom_props=custom_props)
 
     return test_village
