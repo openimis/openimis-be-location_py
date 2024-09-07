@@ -51,7 +51,10 @@ def create_test_location(loc_type, valid=True, custom_props=None):
 
     
     
-def create_test_village(custom_props={}):
+def create_test_village(custom_props=None):
+    if custom_props is None:
+        custom_props = {}
+
     code = custom_props.get('code')
     if code:
         location = Location.objects.filter(code=code, validity_to__isnull=True).first()
