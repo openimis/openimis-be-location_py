@@ -201,6 +201,8 @@ class MoveLocationMutation(OpenIMISMutation):
             new_parent = Location.objects.get(uuid=np_uuid) if np_uuid else None
             np_level = LocationConfig.location_types.index(new_parent.type) if new_parent else -1
             location.parent = new_parent
+            # if location.type in ['D', 'R']:
+            #     detach_pricelist_in_location(location_id=location.id)
             if np_level < level - 1 or np_level >= level:
                 tree_reset_types(new_parent, location, np_level + 1)
             location.save()
@@ -209,6 +211,25 @@ class MoveLocationMutation(OpenIMISMutation):
             return [{
                 'message': _("location.mutation.failed_to_move_location") % {'code': data['code']},
                 'detail': str(exc)}]
+
+
+def detach_pricelist_in_location(location_id):
+    from medical_pricelist.services import set_pricelist_deleted
+    HF_list = HealthFacility.objects.filter(location_id=location_id, validity_to=None)
+    pricelists_items = HealthFacility.select_related('items_pricelist').filter(location_id=location_id,
+                                                                               validity_to=None)
+    pricelists_services = HealthFacility.select_related('services_pricelist').filter(location_id=location_id,
+                                                                                     validity_to=None)
+    for health_facility in HF_list:
+        health_facility.services_pricelist =None
+        health_facility.items_pricelist = None
+        health_facility.save()
+
+    for pricelists_item in pricelists_items:
+        set_pricelist_deleted(pricelists_item)
+
+    for pricelists_service in pricelists_services:
+        set_pricelist_deleted(pricelists_service)
 
 
 class HealthFacilityCodeInputType(graphene.String):
