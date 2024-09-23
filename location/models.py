@@ -364,10 +364,13 @@ class UserDistrict(core_models.VersionedModel):
         :param user: InteractiveUser to filter on
         :return: UserDistrict *objects*
         """
+        cached_data = cache.get(f"user_districts_{user.id}")
 
+        if cached_data is not None:
+            return cached_data
+        districts = []
         if user.is_superuser is True or (hasattr(user, "is_imis_admin") and user.is_imis_admin):
             all_districts = Location.objects.filter(type='D', *filter_validity())
-            districts = []
             idx = 0
             for d in all_districts:
                 districts.append(
@@ -377,26 +380,23 @@ class UserDistrict(core_models.VersionedModel):
                         location=d
                     )
                 )
-
-            return districts
-
         elif not isinstance(user, core_models.InteractiveUser):
             if isinstance(user, core_models.TechnicalUser):
                 logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
                                "We'll return an empty list, but it should be handled before reaching here.")
-            return UserDistrict.objects.none()
-        else:
-            return (
-                UserDistrict.objects
-                .filter(location__type='D')
-                .filter(*filter_validity())
-                .filter(*filter_validity(prefix='location__'))
-                .filter(user=user)
-                .prefetch_related("location")
-                .prefetch_related("location__parent")
-                .order_by("location__parent__code")
-                .order_by("location__code")
-            )
+            districts = UserDistrict.objects.none()    
+        else:   
+            districts = UserDistrict.objects.filter(
+                user=user,
+                location__type='D',
+                *filter_validity(),
+                *filter_validity(prefix='location__')
+                ).prefetch_related("location"
+                ).prefetch_related("location__parent"
+                ).order_by("location__parent__code"
+                ).order_by("location__code")
+        cache.set(f"user_districts_{user.id}", districts)
+        return districts
 
     @classmethod
     def get_user_locations(cls, user):
