@@ -39,7 +39,7 @@ class LocationManager(models.Manager):
                 "ParentLocationId"
             FROM
                 "tblLocations"
-            WHERE "LocationId" = %s
+            WHERE "LocationId" in ( %s )
             UNION ALL
 
             SELECT
@@ -53,7 +53,7 @@ class LocationManager(models.Manager):
             )
             SELECT * FROM CTE_PARENTS;
         """,
-            (location_id,),
+            (",".join(location_id) if isinstance(location_id, list) else location_id,),
         )
         return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
@@ -111,7 +111,7 @@ class LocationManager(models.Manager):
                     0 as "Level"
                 FROM
                     "tblLocations"
-                WHERE "LocationId" = %s
+                WHERE "LocationId" in ( %s )
                 UNION ALL
 
                 SELECT
@@ -126,7 +126,7 @@ class LocationManager(models.Manager):
                 )
                 SELECT * FROM CTE_CHILDREN;
             """,
-            (location_id,),
+            (",".join(location_id) if isinstance(location_id, list) else location_id,),
         )
         return self.get_location_from_ids((children), loc_type) if loc_type else children
 
@@ -160,12 +160,33 @@ class LocationManager(models.Manager):
         return list(qsr)
     
     def is_allowed(self, user, locations_id):
+        if user.is_superuser or not settings.ROW_SECURITY:
+            return True 
         if hasattr(user, '_u'):
             user = user._u
         cache_name = f'user_locations_{user.id}'
         allowed = cache.get(cache_name)
         if not allowed:
-            allowed = list(self.allowed(user.id, qs=None))
+            # for CA
+            if user.is_claim_admin and user.health_facility:
+                allowed = list(self.children(
+                    user.id, 
+                    location_id=user.health_facility.location_id
+                ))
+            if user.is_officer:
+                villages = list(OfficerVillage.objects.filter(
+                    officer=Officer.objects.filter(
+                        code=user.username,
+                        *filter_validity()
+                    ),
+                    *filter_validity()
+                ).values_list(location_id, flat=True))
+                allowed = list(self.parent(
+                    user.id,
+                    location_id=villages
+                ))
+            else:    
+                allowed = list(self.allowed(user.id, qs=None))
             allowed = [l.id for l in allowed]
             cache.set(cache_name, allowed, None)
         return all([l in allowed for l in locations_id])
