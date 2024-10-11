@@ -19,7 +19,7 @@ from django.db.models import Q
 logger = logging.getLogger(__file__)
 
 def free_cache_for_user(user_id):
-    cache_name = f'location_allowed_{user_id}'
+    cache_name = f'user_locations_{user_id}'
     cache.delete(cache_name)
     cache_name = f"user_districts_{user_id}"
     cache.delete(cache_name)
@@ -159,16 +159,16 @@ class LocationManager(models.Manager):
             return [x for x in list(qsr) if x.type == loc_type]
         return list(qsr)
     
-    def is_allowed(self, user, list_id):
+    def is_allowed(self, user, locations_id):
         if hasattr(user, '_u'):
             user = user._u
-        cache_name = f'location_allowed_{user.id}'
+        cache_name = f'user_locations_{user.id}'
         allowed = cache.get(cache_name)
         if not allowed:
             allowed = list(self.allowed(user.id, qs=None))
             allowed = [l.id for l in allowed]
             cache.set(cache_name, allowed, None)
-        return all([l in allowed for l in list_id])
+        return all([l in allowed for l in locations_id])
     
 
 
