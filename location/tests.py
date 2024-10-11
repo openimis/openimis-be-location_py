@@ -1,5 +1,6 @@
 from django.test import TestCase
 from location.test_helpers import create_test_village, create_test_location
+from django.core.cache import cache
 
 from location.models import LocationManager
 from core.services import create_or_update_interactive_user, create_or_update_core_user, create_or_update_user_districts
@@ -49,8 +50,11 @@ class LocationTest(TestCase):
     def test_allowed_location(self):
         allowed = LocationManager().allowed(self.test_user.id, loc_types = ['R','D','W'], qs = True)
         self.assertEqual(len(allowed),3)
-
+        self.assertTrue(LocationManager().is_allowed(self.test_user, [self.test_village.parent.parent.id]), 'is_allowed function is not working as supposed')
         other = create_test_location('D',  custom_props={'parent':self.test_village.parent.parent.parent, 'code':'NOTALLO'})
         allowed = LocationManager().allowed(self.test_user.id, loc_types = ['R','D','W'],qs = True)
         self.assertEqual(len(allowed),2)
+        cached = cache.get(f"user_locations_{self.test_user.id}")
+        self.assertIsNotNone(cached)
+        self.assertFalse(LocationManager().is_allowed(self.test_user, [other.id, self.test_village.parent.parent.id]), 'is_allowed function is not working as supposed')
 

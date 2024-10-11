@@ -6,6 +6,8 @@ import uuid
 from core import filter_validity
 from django.conf import settings
 from django.db import models, connection
+from django.dispatch import receiver
+from django.db.models.signals import post_save
 
 from django.db.models.expressions import RawSQL
 from core import models as core_models
@@ -16,6 +18,15 @@ from django.db.models import Q
 
 logger = logging.getLogger(__file__)
 
+def free_cache_for_user(user_id):
+    cache_name = f'user_locations_{user_id}'
+    cache.delete(cache_name)
+    cache_name = f"user_districts_{user_id}"
+    cache.delete(cache_name)
+    
+@receiver(post_save, sender=core_models.InteractiveUser)
+def free_cache_post_user_save(sender, instance, created, **kwargs):
+    free_cache_for_user(instance.id)
 
 class LocationManager(models.Manager):
     def parents(self, location_id, loc_type=None):
@@ -147,6 +158,18 @@ class LocationManager(models.Manager):
         if loc_type:
             return [x for x in list(qsr) if x.type == loc_type]
         return list(qsr)
+    
+    def is_allowed(self, user, locations_id):
+        if hasattr(user, '_u'):
+            user = user._u
+        cache_name = f'user_locations_{user.id}'
+        allowed = cache.get(cache_name)
+        if not allowed:
+            allowed = list(self.allowed(user.id, qs=None))
+            allowed = [l.id for l in allowed]
+            cache.set(cache_name, allowed, None)
+        return all([l in allowed for l in locations_id])
+    
 
 
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
@@ -422,6 +445,9 @@ class UserDistrict(core_models.VersionedModel):
             pass
         return queryset
 
+@receiver(post_save, sender=UserDistrict)
+def free_cache_post_user_district_save(sender, instance, created, **kwargs):
+    free_cache_for_user(instance.user_id)
 
 class OfficerVillage(core_models.VersionedModel):
     id = models.AutoField(db_column="OfficerVillageId", primary_key=True)
