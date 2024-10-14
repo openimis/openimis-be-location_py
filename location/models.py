@@ -19,7 +19,9 @@ from django.db.models import Q
 logger = logging.getLogger(__file__)
 
 def free_cache_for_user(user_id):
-    cache_name = f'user_locations_{user_id}'
+    cache_name = f'user_locations__{user_id}'
+    cache.delete(cache_name)
+    cache_name = f'user_locations_s_{user_id}'
     cache.delete(cache_name)
     cache_name = f"user_districts_{user_id}"
     cache.delete(cache_name)
@@ -39,7 +41,7 @@ class LocationManager(models.Manager):
                 "ParentLocationId"
             FROM
                 "tblLocations"
-            WHERE "LocationId" = %s
+            WHERE "LocationId" in ( %s )
             UNION ALL
 
             SELECT
@@ -53,7 +55,7 @@ class LocationManager(models.Manager):
             )
             SELECT * FROM CTE_PARENTS;
         """,
-            (location_id,),
+            (",".join(map(str, location_id)) if isinstance(location_id, list) else location_id,),
         )
         return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
@@ -111,7 +113,7 @@ class LocationManager(models.Manager):
                     0 as "Level"
                 FROM
                     "tblLocations"
-                WHERE "LocationId" = %s
+                WHERE "LocationId" in ( %s )
                 UNION ALL
 
                 SELECT
@@ -126,7 +128,7 @@ class LocationManager(models.Manager):
                 )
                 SELECT * FROM CTE_CHILDREN;
             """,
-            (location_id,),
+            (",".join(map(str, location_id)) if isinstance(location_id, list) else location_id,),
         )
         return self.get_location_from_ids((children), loc_type) if loc_type else children
 
@@ -159,14 +161,44 @@ class LocationManager(models.Manager):
             return [x for x in list(qsr) if x.type == loc_type]
         return list(qsr)
     
-    def is_allowed(self, user, locations_id):
+    def is_allowed(self, user, locations_id, strict=True):
+        if user.is_superuser or not settings.ROW_SECURITY:
+            return True 
         if hasattr(user, '_u'):
             user = user._u
-        cache_name = f'user_locations_{user.id}'
+        cache_name = f'user_locations_{"s" if strict else ""}_{user.id}'
         allowed = cache.get(cache_name)
         if not allowed:
-            allowed = list(self.allowed(user.id, qs=None))
-            allowed = [l.id for l in allowed]
+            is_list_id = False
+            # for CA
+            if user.is_claim_admin and user.health_facility:
+                allowed = set(self.children(
+                    location_id=user.health_facility.location_id
+                ))
+                if strict is False:
+                    allowed.update(self.parents(
+                        location_id=user.health_facility.location_id
+                    ))
+            elif user.is_officer:
+                is_list_id = True
+                allowed = list(OfficerVillage.objects.filter(
+                    officer=core_models.Officer.objects.filter(
+                        code=user.login_name,
+                        *filter_validity()
+                    ).first(),
+                    *filter_validity()
+                ).values_list('location_id', flat=True))
+                
+                if strict is False:
+                    parent = set(l.id for l in self.parents(
+                        location_id=allowed,
+                    ))
+                    parent.update(allowed)
+                    allowed = list(parent)
+            else:    
+                allowed = set(self.allowed(user.id, strict=strict, qs=None))
+            if not is_list_id:
+                allowed = list(set(l.id for l in allowed))
             cache.set(cache_name, allowed, None)
         return all([l in allowed for l in locations_id])
     
