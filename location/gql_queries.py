@@ -117,7 +117,7 @@ class UserRegionGQLType(graphene.ObjectType):
     name = graphene.String()
 
     def __init__(self, region):
-        if not region:
+        if region:
             self.id = str(base64.b64encode(
                 f"LocationGQLType:{region.id}".encode()), 'utf-8')
             self.uuid = region.uuid
