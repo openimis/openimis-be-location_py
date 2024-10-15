@@ -117,11 +117,12 @@ class UserRegionGQLType(graphene.ObjectType):
     name = graphene.String()
 
     def __init__(self, region):
-        self.id = str(base64.b64encode(
-            f"LocationGQLType:{region.id}".encode()), 'utf-8')
-        self.uuid = region.uuid
-        self.code = region.code
-        self.name = region.name
+        if not region:
+            self.id = str(base64.b64encode(
+                f"LocationGQLType:{region.id}".encode()), 'utf-8')
+            self.uuid = region.uuid
+            self.code = region.code
+            self.name = region.name
 
 
 class UserDistrictGQLType(graphene.ObjectType):
@@ -132,12 +133,13 @@ class UserDistrictGQLType(graphene.ObjectType):
     parent = graphene.Field(UserRegionGQLType)
 
     def __init__(self, district):
-        self.id = str(base64.b64encode(
-            f"LocationGQLType:{district.location_id}".encode()), 'utf-8')
-        self.uuid = district.location.uuid
-        self.code = district.location.code
-        self.name = district.location.name
-        self.parent = UserRegionGQLType(district.location.parent)
+        if district:
+            self.id = str(base64.b64encode(
+                f"LocationGQLType:{district.location_id}".encode()), 'utf-8')
+            self.uuid = district.location.uuid
+            self.code = district.location.code
+            self.name = district.location.name
+            self.parent = UserRegionGQLType(district.location.parent)
 
 
 class UserDistrictType(DjangoObjectType):
