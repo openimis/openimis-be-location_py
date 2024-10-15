@@ -139,7 +139,7 @@ class LocationManager(models.Manager):
                 return queryset
             else:
                 return Q()
-        elif not user.is_imis_admin:
+        elif not user.is_superuser:
             q_allowed_location = Q((f"{prefix}__in", self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull", True))
 
             if queryset is not None:
@@ -225,7 +225,7 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
                 return ClaimAdmin.objects \
                     .filter(code=user.username, has_login=True, validity_to__isnull=True) \
                     .get().officer_allowed_locations
-            elif user.is_imis_admin:
+            elif user.is_superuser:
                 return Location.objects
             else:
                 return cls.objects.allowed(user.i_user_id, qs=True)
@@ -325,7 +325,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
             queryset = cls.filter_queryset(queryset)
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
-        if settings.ROW_SECURITY and not user._u.is_imis_admin:
+        if settings.ROW_SECURITY and not user._u.is_superuser:
             return LocationManager().build_user_location_filter_query(user._u, queryset=queryset, loc_types=['D'])
         return queryset
 
@@ -387,12 +387,14 @@ class UserDistrict(core_models.VersionedModel):
         :param user: InteractiveUser to filter on
         :return: UserDistrict *objects*
         """
+        if hasattr(user, '_u'):
+            user = user._u
         cached_data = cache.get(f"user_districts_{user.id}")
 
         if cached_data is not None:
             return cached_data
         districts = []
-        if user.is_superuser is True or (hasattr(user, "is_imis_admin") and user.is_imis_admin):
+        if user.is_superuser is True:
             all_districts = Location.objects.filter(type='D', *filter_validity())
             idx = 0
             for d in all_districts:
