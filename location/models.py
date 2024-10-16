@@ -159,7 +159,7 @@ class LocationManager(models.Manager):
             return [x for x in list(qsr) if x.type == loc_type]
         return list(qsr)
     
-    def is_allowed(self, user, locations_id, strict=True):
+    def get_allowed_ids(self, user, strict=True):
         if user.is_superuser or not settings.ROW_SECURITY:
             return True 
         if hasattr(user, '_u'):
@@ -180,7 +180,11 @@ class LocationManager(models.Manager):
                 ).values_list('location_id', flat=True))
             else:    
                 allowed = [d.location_id for d in UserDistrict(user).get_user_districts(user)]
-            cache.set(cache_name, allowed, None)  
+            cache.set(cache_name, allowed, None) 
+        return allowed
+    
+    def is_allowed(self, user, locations_id, strict=True):
+        allowed = self.get_allowed_ids(user, strict)
         return all([l in extend_allowed_locations(allowed, strict) for l in locations_id])
     
    
