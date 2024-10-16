@@ -139,8 +139,13 @@ class LocationManager(models.Manager):
                 return queryset
             else:
                 return Q()
-        elif not user.is_imis_admin:
-            q_allowed_location = Q((f"{prefix}__in", self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull", True))
+        elif not user.is_superuser:
+            q_allowed_location = Q(
+                (f"{prefix}__in", extend_allowed_locations(self.get_allowed_ids(user), True, loc_types))
+                ) | Q(
+                    (f"{prefix}__isnull", True)
+                )
+                
 
             if queryset is not None:
                 return queryset.filter(q_allowed_location)
@@ -192,16 +197,20 @@ def cache_location_graph():
     """Cache the location graph as a dictionary of edges."""
     locations = Location.objects.filter(*filter_validity())
     graph = {}
-    
+    location_types = {}
     for location in locations:
         parent_id = location.parent_id if location.parent_id else 'root'
         if parent_id not in graph:
             graph[parent_id] = set()
         graph[parent_id].add(location.id)
+        if location.type not in location_types:
+            location_types[location.type] = set()
+        location_types[location.type].add(location.id)
     
     cache.set('location_graph', graph, timeout=None)  # Cache indefinitely
+    cache.set('location_types', location_types, timeout=None) 
 
-def extend_allowed_locations(location_pks, strict=True):
+def extend_allowed_locations(location_pks, strict=True, loc_types=None):
     """
     Get underlying locations for given location PKs.
     If strict is False, also include parents.
@@ -233,7 +242,14 @@ def extend_allowed_locations(location_pks, strict=True):
                     parents.add(parent)
                     to_visit.add(parent)
         result_pks.update(parents)
-    
+    if result_pks and loc_types:
+        location_types = cache.get('location_types')
+        location_types_search = set()
+        for t in loc_types:
+            if t in location_types:
+                location_types_search.update(location_types[t])
+        result_pks = [r for r in result_pks if r in location_types_search]
+
     # Fetch Location objects for the result PKs
     return result_pks
 
