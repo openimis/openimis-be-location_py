@@ -4,6 +4,7 @@ from core.models import Officer
 from core.schema import OrderedDjangoFilterConnectionField
 from core.schema import signal_mutation_module_validate
 from django.utils.translation import gettext as _
+from django.core.exceptions import PermissionDenied
 from graphene_django.filter import DjangoFilterConnectionField
 from .gql_mutations import *
 from .gql_queries import *
@@ -126,14 +127,13 @@ class Query(graphene.ObjectType):
 
         if (kwargs.get('ignore_location') == False or kwargs.get('ignore_location') is None):
 
-          if settings.ROW_SECURITY and not info.context.user._u.is_imis_admin:
+          if settings.ROW_SECURITY and not info.context.user._u.is_superuser:
               filters += [LocationManager().build_user_location_filter_query(info.context.user._u, loc_types= ['D'])]
         return HealthFacility.objects.filter(*filters)
 
     def resolve_user_districts(self, info, **kwargs):
         if info.context.user.is_anonymous:
-            raise NotImplementedError(
-                'Anonymous Users are not registered for districts')
+            raise PermissionDenied(_('unauthorized'))
         if not isinstance(info.context.user._u, core_models.InteractiveUser):
             raise NotImplementedError(
                 'Only Interactive Users are registered for districts')
