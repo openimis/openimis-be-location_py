@@ -7,7 +7,7 @@ from core import filter_validity
 from django.conf import settings
 from django.db import models, connection
 from django.dispatch import receiver
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 
 from django.db.models.expressions import RawSQL
 from core import models as core_models
@@ -18,10 +18,8 @@ from django.db.models import Q
 
 logger = logging.getLogger(__file__)
 
-def free_cache_for_user(user_id):
-    cache_name = f'user_locations__{user_id}'
-    cache.delete(cache_name)
-    cache_name = f'user_locations_s_{user_id}'
+def free_cache_for_user(user_id='*'):
+    cache_name = f'user_locations_{user_id}'
     cache.delete(cache_name)
     cache_name = f"user_districts_{user_id}"
     cache.delete(cache_name)
@@ -166,21 +164,13 @@ class LocationManager(models.Manager):
             return True 
         if hasattr(user, '_u'):
             user = user._u
-        cache_name = f'user_locations_{"s" if strict else ""}_{user.id}'
+        cache_name = f'user_locations_{user.id}'
         allowed = cache.get(cache_name)
         if not allowed:
-            is_list_id = False
             # for CA
             if user.is_claim_admin and user.health_facility:
-                allowed = set(self.children(
-                    location_id=user.health_facility.location_id
-                ))
-                if strict is False:
-                    allowed.update(self.parents(
-                        location_id=user.health_facility.location_id
-                    ))
+                allowed = [user.health_facility.location_id]
             elif user.is_officer:
-                is_list_id = True
                 allowed = list(OfficerVillage.objects.filter(
                     officer=core_models.Officer.objects.filter(
                         code=user.login_name,
@@ -188,20 +178,65 @@ class LocationManager(models.Manager):
                     ).first(),
                     *filter_validity()
                 ).values_list('location_id', flat=True))
-                
-                if strict is False:
-                    parent = set(l.id for l in self.parents(
-                        location_id=allowed,
-                    ))
-                    parent.update(allowed)
-                    allowed = list(parent)
             else:    
-                allowed = set(self.allowed(user.id, strict=strict, qs=None))
-            if not is_list_id:
-                allowed = list(set(l.id for l in allowed))
-            cache.set(cache_name, allowed, None)
-        return all([l in allowed for l in locations_id])
+                allowed = [d.location_id for d in UserDistrict(user).get_user_districts(user)]
+            cache.set(cache_name, allowed, None)  
+        return all([l in extend_allowed_locations(allowed, strict) for l in locations_id])
     
+   
+def cache_location_graph():
+    """Cache the location graph as a dictionary of edges."""
+    locations = Location.objects.filter(*filter_validity())
+    graph = {}
+    
+    for location in locations:
+        parent_id = location.parent_id if location.parent_id else 'root'
+        if parent_id not in graph:
+            graph[parent_id] = set()
+        graph[parent_id].add(location.id)
+    
+    cache.set('location_graph', graph, timeout=None)  # Cache indefinitely
+
+def extend_allowed_locations(location_pks, strict=True):
+    """
+    Get underlying locations for given location PKs.
+    If strict is False, also include parents.
+    """
+    graph = cache.get('location_graph')
+    if not graph:
+        cache_location_graph()
+        graph = cache.get('location_graph')
+    
+    result_pks = set()
+    to_visit = set(location_pks)
+    visited = set()
+
+    while to_visit:
+        current = to_visit.pop()
+        visited.add(current)
+        result_pks.add(current)
+        if current in graph:
+            children = graph[current] - visited
+            to_visit.update(children)
+    
+    if not strict:
+        to_visit = set(location_pks)
+        parents = set()
+        while to_visit:
+            current = to_visit.pop()
+            for parent, children in graph.items():
+                if current in children and parent != 'root':
+                    parents.add(parent)
+                    to_visit.add(parent)
+        result_pks.update(parents)
+    
+    # Fetch Location objects for the result PKs
+    return result_pks
+
+# Function to update the cache when Location objects are modified
+def update_location_cache(sender, instance, **kwargs):
+    cache_location_graph()
+
 
 
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
@@ -419,38 +454,44 @@ class UserDistrict(core_models.VersionedModel):
         :param user: InteractiveUser to filter on
         :return: UserDistrict *objects*
         """
-        cached_data = cache.get(f"user_districts_{user.id}")
-
-        if cached_data is not None:
-            return cached_data
+        cachedata = cache.get(f"user_districts_{user.id}")
         districts = []
-        if user.is_superuser is True or (hasattr(user, "is_imis_admin") and user.is_imis_admin):
-            all_districts = Location.objects.filter(type='D', *filter_validity())
-            idx = 0
-            for d in all_districts:
+        if cachedata is None:
+            cachedata = []
+            if user.is_superuser:
+                location_ids = Location.objects.filter(type='D', *filter_validity()).values_list('id', flat=True)
+                for l in location_ids:
+                    cachedata.append([0, l])
+            elif not isinstance(user, core_models.InteractiveUser):
+                if isinstance(user, core_models.TechnicalUser):
+                    logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
+                                "We'll return an empty list, but it should be handled before reaching here.")
+                districts = UserDistrict.objects.none()
+            else:   
+                districts = UserDistrict.objects.filter(
+                    user=user,
+                    location__type='D',
+                    *filter_validity(),
+                    *filter_validity(prefix='location__')
+                    ).prefetch_related("location"
+                    ).prefetch_related("location__parent"
+                    ).order_by("location__parent__code"
+                    ).order_by("location__code")
+            for d in districts:
+                cachedata.append([d.id, d.location_id])
+                        
+            cache.set(f"user_districts_{user.id}", cachedata)
+            
+        if not districts:
+            for d in cachedata:
                 districts.append(
                     UserDistrict(
-                        id=idx,
+                        id=d[0],
                         user=user,
-                        location=d
+                        location_id=d[1]
                     )
                 )
-        elif not isinstance(user, core_models.InteractiveUser):
-            if isinstance(user, core_models.TechnicalUser):
-                logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
-                               "We'll return an empty list, but it should be handled before reaching here.")
-            districts = UserDistrict.objects.none()    
-        else:   
-            districts = UserDistrict.objects.filter(
-                user=user,
-                location__type='D',
-                *filter_validity(),
-                *filter_validity(prefix='location__')
-                ).prefetch_related("location"
-                ).prefetch_related("location__parent"
-                ).order_by("location__parent__code"
-                ).order_by("location__code")
-        cache.set(f"user_districts_{user.id}", districts)
+        
         return districts
 
     @classmethod
@@ -478,8 +519,17 @@ class UserDistrict(core_models.VersionedModel):
         return queryset
 
 @receiver(post_save, sender=UserDistrict)
+@receiver(post_delete, sender=UserDistrict)
 def free_cache_post_user_district_save(sender, instance, created, **kwargs):
     free_cache_for_user(instance.user_id)
+    
+
+@receiver(post_save, sender=Location)
+@receiver(post_delete, sender=Location)
+def location_changed(sender, instance, **kwargs):
+    update_location_cache(sender, instance, **kwargs)
+    free_cache_for_user('*')
+    
 
 class OfficerVillage(core_models.VersionedModel):
     id = models.AutoField(db_column="OfficerVillageId", primary_key=True)

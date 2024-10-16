@@ -88,7 +88,7 @@ class LocationTest(TestCase):
         allowed = LocationManager().allowed(self.test_user._u.id, loc_types=['R', 'D', 'W'])
         self.assertEqual(len(allowed), 2)
         self.assertFalse(LocationManager().is_allowed(self.test_user, [self.other_loc.id, self.test_village.parent.parent.id]), 'is_allowed function is not working as supposed')
-        cached = cache.get(f"user_locations_s_{self.test_user._u.id}")
+        cached = cache.get(f"user_locations_{self.test_user._u.id}")
         self.assertIsNotNone(cached)
  
     def test_allowed_location_eo(self):

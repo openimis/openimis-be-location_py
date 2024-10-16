@@ -165,8 +165,6 @@ class DeleteLocationMutation(OpenIMISMutation):
         UserDistrict.objects\
             .filter(location=location, validity_to__isnull=True)\
             .update(validity_to=location_delete_date)
-        cache.delete('user_disctrict_'+user.id)
-
 
 
 def tree_reset_types(parent, location, new_level):
