@@ -502,7 +502,7 @@ class UserDistrict(core_models.VersionedModel):
                         
             cache.set(f"user_districts_{user.id}", cachedata)
             
-        if not districts:
+        if not districts and cachedata:
             for d in cachedata:
                 districts.append(
                     UserDistrict(
