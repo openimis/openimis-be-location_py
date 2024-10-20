@@ -477,7 +477,6 @@ class UserDistrict(core_models.VersionedModel):
         if LocationConfig.no_location_check :
             cachestringkey = "user_districts_all"
         cachedata = cache.get(cachestringkey)
-        print("cachedata", cachedata)
         districts = []
         if cachedata is None:
             cachedata = []
