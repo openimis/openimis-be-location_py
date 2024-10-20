@@ -23,7 +23,8 @@ def free_cache_for_user(user_id='*'):
     cache.delete(cache_name)
     cache_name = f"user_districts_{user_id}"
     cache.delete(cache_name)
-    
+
+
 @receiver(post_save, sender=core_models.InteractiveUser)
 def free_cache_post_user_save(sender, instance, created, **kwargs):
     free_cache_for_user(instance.id)
@@ -155,15 +156,13 @@ class LocationManager(models.Manager):
             else:
                 return Q()
 
-
-
     def get_location_from_ids(self, qsr, loc_type):
         if loc_type:
             return [x for x in list(qsr) if x.type == loc_type]
         return list(qsr)
     
     def get_allowed_ids(self, user, strict=True):
-        if user.is_superuser or not settings.ROW_SECURITY:
+        if LocationConfig.no_location_check or user.is_superuser or not settings.ROW_SECURITY:
             return True 
         if hasattr(user, '_u'):
             user = user._u
@@ -474,11 +473,15 @@ class UserDistrict(core_models.VersionedModel):
         """
         if hasattr(user, '_u'):
             user = user._u
-        cachedata = cache.get(f"user_districts_{user.id}")
+        cachestringkey = f"user_districts_{user.id}"
+        if LocationConfig.no_location_check :
+            cachestringkey = "user_districts_all"
+        cachedata = cache.get(cachestringkey)
+        print("cachedata", cachedata)
         districts = []
         if cachedata is None:
             cachedata = []
-            if user.is_superuser:
+            if user.is_superuser or LocationConfig.no_location_check:
                 location_ids = Location.objects.filter(type='D', *filter_validity()).values_list('id', flat=True)
                 for l in location_ids:
                     cachedata.append([0, l])
@@ -499,8 +502,7 @@ class UserDistrict(core_models.VersionedModel):
                     ).order_by("location__code")
             for d in districts:
                 cachedata.append([d.id, d.location_id])
-                        
-            cache.set(f"user_districts_{user.id}", cachedata)
+            cache.set(cachestringkey, cachedata)
             
         if not districts and cachedata:
             for d in cachedata:
