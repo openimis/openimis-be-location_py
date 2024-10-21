@@ -32,7 +32,7 @@ def free_cache_for_user(user_id='*'):
     
 @receiver(post_save, sender=core_models.InteractiveUser)
 @receiver(post_delete, sender=core_models.InteractiveUser)
-def free_cache_post_user_save(sender, instance, created, **kwargs):
+def free_cache_post_user_save(sender, instance, **kwargs):
     free_cache_for_user(instance.id)
 
 class LocationManager(models.Manager):
