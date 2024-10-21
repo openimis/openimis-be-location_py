@@ -1,6 +1,8 @@
 from functools import reduce
 import django
-from django.core.cache import cache
+from django.core.cache import caches
+from django_redis.cache import RedisCache 
+cache = caches['location']
 import uuid
 
 from core import filter_validity
@@ -19,12 +21,17 @@ from django.db.models import Q
 logger = logging.getLogger(__file__)
 
 def free_cache_for_user(user_id='*'):
-    cache_name = f'user_locations_{user_id}'
-    cache.delete(cache_name)
-    cache_name = f"user_districts_{user_id}"
-    cache.delete(cache_name)
+    # wildcard only supported for Redis
+    if user_id=='*' and not isinstance(cache, RedisCache):
+        cache.clear()
+    else:  
+        cache_name = f'user_locations_{user_id}'
+        cache.delete(cache_name)
+        cache_name = f"user_districts_{user_id}"
+        cache.delete(cache_name)
     
 @receiver(post_save, sender=core_models.InteractiveUser)
+@receiver(post_delete, sender=core_models.InteractiveUser)
 def free_cache_post_user_save(sender, instance, created, **kwargs):
     free_cache_for_user(instance.id)
 
@@ -548,7 +555,7 @@ def free_cache_post_user_district_save(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=Location)
 def location_changed(sender, instance, **kwargs):
     update_location_cache(sender, instance, **kwargs)
-    free_cache_for_user('*')
+    free_cache_for_user()
     
 
 class OfficerVillage(core_models.VersionedModel):

@@ -7,7 +7,7 @@ from location.test_helpers import (
 )
 from core.test_helpers import create_test_officer, create_test_interactive_user
 from claim.test_helpers import create_test_claim_admin
-from django.core.cache import cache
+from django.core.cache import caches
 
 from location.models import LocationManager
 from core.services import create_or_update_interactive_user, create_or_update_core_user, create_or_update_user_districts
@@ -88,8 +88,23 @@ class LocationTest(TestCase):
         allowed = LocationManager().allowed(self.test_user._u.id, loc_types=['R', 'D', 'W'])
         self.assertEqual(len(allowed), 2)
         self.assertFalse(LocationManager().is_allowed(self.test_user, [self.other_loc.id, self.test_village.parent.parent.id]), 'is_allowed function is not working as supposed')
-        cached = cache.get(f"user_locations_{self.test_user._u.id}")
+        cached = caches['location'].get(f"user_locations_{self.test_user._u.id}")
         self.assertIsNotNone(cached)
+    
+    def test_cache_invalidation(self):    
+        LocationManager().is_allowed(self.test_user,[])
+        cached = caches['location'].get(f"user_locations_{self.test_user._u.id}")
+        self.assertIsNotNone(cached, 'cache not found')
+        self.test_user._u.email='test@opeimis.org'
+        self.test_user._u.save()
+        # test invalidation
+        cached = caches['location'].get(f"user_locations_{self.test_user._u.id}")
+        self.assertIsNone(cached, 'cache not cleared')
+        LocationManager().is_allowed(self.test_user,[])
+        create_test_village()
+        cached = caches['location'].get(f"user_locations_{self.test_user._u.id}")
+        self.assertIsNone(cached, 'cache not cleared')
+        
  
     def test_allowed_location_eo(self):
         self.assertFalse(
