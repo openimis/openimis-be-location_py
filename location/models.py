@@ -190,7 +190,7 @@ class LocationManager(models.Manager):
                 ).values_list('location_id', flat=True))
             else:    
                 allowed = [d.location_id for d in UserDistrict(user).get_user_districts(user)]
-            cache.set(cache_name, allowed, None) 
+            cache.set(cache_name, allowed, None)
         return allowed
     
     def is_allowed(self, user, locations_id, strict=True):
@@ -220,6 +220,10 @@ def extend_allowed_locations(location_pks, strict=True, loc_types=None):
     Get underlying locations for given location PKs.
     If strict is False, also include parents.
     """
+    if not isinstance(location_pks, list):
+        logger.error(
+            f"extend_allowed_locations is expecting a list but received {location_pks}"
+            )
     graph = cache.get('location_graph')
     if not graph:
         cache_location_graph()
@@ -493,8 +497,7 @@ class UserDistrict(core_models.VersionedModel):
                 if isinstance(user, core_models.TechnicalUser):
                     logger.warning(f"get_user_districts called with a technical user `{user.username}`. "
                                 "We'll return an empty list, but it should be handled before reaching here.")
-                districts = UserDistrict.objects.none()
-            else:   
+            else:
                 districts = UserDistrict.objects.filter(
                     user=user,
                     location__type='D',
