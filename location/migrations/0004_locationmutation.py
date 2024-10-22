@@ -8,21 +8,43 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0009_mutationlog_client_mutation_details'),
-        ('location', '0003_userdistrict'),
+        ("core", "0009_mutationlog_client_mutation_details"),
+        ("location", "0003_userdistrict"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='LocationMutation',
+            name="LocationMutation",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('location', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='mutations', to='location.Location')),
-                ('mutation', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='locations', to='core.MutationLog')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "location",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="mutations",
+                        to="location.Location",
+                    ),
+                ),
+                (
+                    "mutation",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="locations",
+                        to="core.MutationLog",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'location_LocationMutation',
-                'managed': True,
+                "db_table": "location_LocationMutation",
+                "managed": True,
             },
         ),
     ]

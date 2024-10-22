@@ -11,17 +11,21 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunSQL(
-            """
+            (
+                """
         CREATE NONCLUSTERED INDEX ix_tblLocation_parentLocationId ON [dbo].[tblLocations]
         (
             [ParentLocationId] ASC,
             [LegacyID] ASC
-        )""" if settings.MSSQL else """
+        )"""
+                if settings.MSSQL
+                else """
         CREATE INDEX "ix_tblLocation_parentLocationId" ON "tblLocations"
         (
             "ParentLocationId" ASC,
             "LegacyID" ASC
-        )""",
+        )"""
+            ),
             reverse_sql='DROP INDEX "ix_tblLocation_parentLocationId" ON "tblLocations"',
         )
     ]

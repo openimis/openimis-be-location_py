@@ -27,7 +27,7 @@ def add_rights(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('location', '0008_add_enrollment_officer_gql_query_location_right')
+        ("location", "0008_add_enrollment_officer_gql_query_location_right")
     ]
 
     operations = [

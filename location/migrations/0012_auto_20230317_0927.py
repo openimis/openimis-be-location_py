@@ -6,16 +6,16 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('location', '0011_auto_20230317_0924'),
+        ("location", "0011_auto_20230317_0924"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='healthfacility',
-            options={'managed': True},
+            name="healthfacility",
+            options={"managed": True},
         ),
         migrations.AlterModelOptions(
-            name='location',
-            options={'managed': True},
+            name="location",
+            options={"managed": True},
         ),
     ]

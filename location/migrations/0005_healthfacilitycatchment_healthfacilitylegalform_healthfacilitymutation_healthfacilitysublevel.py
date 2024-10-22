@@ -8,62 +8,143 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0009_mutationlog_client_mutation_details'),
-        ('location', '0004_locationmutation'),
+        ("core", "0009_mutationlog_client_mutation_details"),
+        ("location", "0004_locationmutation"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='HealthFacilityCatchment',
+            name="HealthFacilityCatchment",
             fields=[
-                ('id', models.AutoField(db_column='HFCatchmentId', primary_key=True, serialize=False)),
-                ('legacy_id', models.IntegerField(blank=True, db_column='LegacyId', null=True)),
-                ('catchment', models.IntegerField(blank=True, db_column='Catchment', null=True)),
-                ('validity_from', models.DateTimeField(blank=True, db_column='ValidityFrom', null=True)),
-                ('validity_to', models.DateTimeField(blank=True, db_column='ValidityTo', null=True)),
-                ('audit_user_id', models.IntegerField(blank=True, db_column='AuditUserId', null=True)),
+                (
+                    "id",
+                    models.AutoField(
+                        db_column="HFCatchmentId", primary_key=True, serialize=False
+                    ),
+                ),
+                (
+                    "legacy_id",
+                    models.IntegerField(blank=True, db_column="LegacyId", null=True),
+                ),
+                (
+                    "catchment",
+                    models.IntegerField(blank=True, db_column="Catchment", null=True),
+                ),
+                (
+                    "validity_from",
+                    models.DateTimeField(
+                        blank=True, db_column="ValidityFrom", null=True
+                    ),
+                ),
+                (
+                    "validity_to",
+                    models.DateTimeField(blank=True, db_column="ValidityTo", null=True),
+                ),
+                (
+                    "audit_user_id",
+                    models.IntegerField(blank=True, db_column="AuditUserId", null=True),
+                ),
             ],
             options={
-                'db_table': 'tblHFCatchment',
-                'managed': False,
+                "db_table": "tblHFCatchment",
+                "managed": False,
             },
         ),
         migrations.CreateModel(
-            name='HealthFacilityLegalForm',
+            name="HealthFacilityLegalForm",
             fields=[
-                ('code', models.CharField(db_column='LegalFormCode', max_length=1, primary_key=True, serialize=False)),
-                ('legal_form', models.CharField(db_column='LegalForms', max_length=50)),
-                ('sortorder', models.IntegerField(blank=True, db_column='SortOrder', null=True)),
-                ('altlanguage', models.CharField(blank=True, db_column='AltLanguage', max_length=50, null=True)),
+                (
+                    "code",
+                    models.CharField(
+                        db_column="LegalFormCode",
+                        max_length=1,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("legal_form", models.CharField(db_column="LegalForms", max_length=50)),
+                (
+                    "sortorder",
+                    models.IntegerField(blank=True, db_column="SortOrder", null=True),
+                ),
+                (
+                    "altlanguage",
+                    models.CharField(
+                        blank=True, db_column="AltLanguage", max_length=50, null=True
+                    ),
+                ),
             ],
             options={
-                'db_table': 'tblLegalForms',
-                'managed': False,
+                "db_table": "tblLegalForms",
+                "managed": False,
             },
         ),
         migrations.CreateModel(
-            name='HealthFacilitySubLevel',
+            name="HealthFacilitySubLevel",
             fields=[
-                ('code', models.CharField(db_column='HFSublevel', max_length=1, primary_key=True, serialize=False)),
-                ('health_facility_sub_level', models.CharField(blank=True, db_column='HFSublevelDesc', max_length=50, null=True)),
-                ('sortorder', models.IntegerField(blank=True, db_column='SortOrder', null=True)),
-                ('altlanguage', models.CharField(blank=True, db_column='AltLanguage', max_length=50, null=True)),
+                (
+                    "code",
+                    models.CharField(
+                        db_column="HFSublevel",
+                        max_length=1,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "health_facility_sub_level",
+                    models.CharField(
+                        blank=True, db_column="HFSublevelDesc", max_length=50, null=True
+                    ),
+                ),
+                (
+                    "sortorder",
+                    models.IntegerField(blank=True, db_column="SortOrder", null=True),
+                ),
+                (
+                    "altlanguage",
+                    models.CharField(
+                        blank=True, db_column="AltLanguage", max_length=50, null=True
+                    ),
+                ),
             ],
             options={
-                'db_table': 'tblHFSublevel',
-                'managed': False,
+                "db_table": "tblHFSublevel",
+                "managed": False,
             },
         ),
         migrations.CreateModel(
-            name='HealthFacilityMutation',
+            name="HealthFacilityMutation",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('health_facility', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='mutations', to='location.HealthFacility')),
-                ('mutation', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='health_facilities', to='core.MutationLog')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "health_facility",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="mutations",
+                        to="location.HealthFacility",
+                    ),
+                ),
+                (
+                    "mutation",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="health_facilities",
+                        to="core.MutationLog",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'location_HealthFacilityMutation',
-                'managed': True,
+                "db_table": "location_HealthFacilityMutation",
+                "managed": True,
             },
         ),
     ]

@@ -9,69 +9,101 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0019_extended_field'),
-        ('location', '0013_auto_20230317_1534'),
+        ("core", "0019_extended_field"),
+        ("location", "0013_auto_20230317_1534"),
     ]
 
     operations = [
         migrations.RenameField(
-            model_name='healthfacilitylegalform',
-            old_name='altlanguage',
-            new_name='alt_language',
+            model_name="healthfacilitylegalform",
+            old_name="altlanguage",
+            new_name="alt_language",
         ),
         migrations.RenameField(
-            model_name='healthfacilitylegalform',
-            old_name='sortorder',
-            new_name='sort_order',
+            model_name="healthfacilitylegalform",
+            old_name="sortorder",
+            new_name="sort_order",
         ),
         migrations.RenameField(
-            model_name='healthfacilitysublevel',
-            old_name='altlanguage',
-            new_name='alt_language',
+            model_name="healthfacilitysublevel",
+            old_name="altlanguage",
+            new_name="alt_language",
         ),
         migrations.RenameField(
-            model_name='healthfacilitysublevel',
-            old_name='sortorder',
-            new_name='sort_order',
+            model_name="healthfacilitysublevel",
+            old_name="sortorder",
+            new_name="sort_order",
         ),
         migrations.AddField(
-            model_name='healthfacilitycatchment',
-            name='health_facility',
-            field=models.ForeignKey(db_column='HFID', on_delete=django.db.models.deletion.DO_NOTHING, related_name='catchments', to='location.healthfacility'),
+            model_name="healthfacilitycatchment",
+            name="health_facility",
+            field=models.ForeignKey(
+                db_column="HFID",
+                on_delete=django.db.models.deletion.DO_NOTHING,
+                related_name="catchments",
+                to="location.healthfacility",
+            ),
         ),
         migrations.AddField(
-            model_name='healthfacilitycatchment',
-            name='location',
-            field=models.ForeignKey(db_column='LocationId', on_delete=django.db.models.deletion.DO_NOTHING, related_name='catchments', to='location.location'),
+            model_name="healthfacilitycatchment",
+            name="location",
+            field=models.ForeignKey(
+                db_column="LocationId",
+                on_delete=django.db.models.deletion.DO_NOTHING,
+                related_name="catchments",
+                to="location.location",
+            ),
         ),
         migrations.AddField(
-            model_name='officervillage',
-            name='location',
-            field=models.ForeignKey(db_column='LocationId', on_delete=django.db.models.deletion.CASCADE, related_name='officer_villages', to='location.location'),
+            model_name="officervillage",
+            name="location",
+            field=models.ForeignKey(
+                db_column="LocationId",
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="officer_villages",
+                to="location.location",
+            ),
         ),
         migrations.AddField(
-            model_name='officervillage',
-            name='officer',
-            field=models.ForeignKey(db_column='OfficerId', on_delete=django.db.models.deletion.CASCADE, related_name='officer_villages', to='core.officer'),
+            model_name="officervillage",
+            name="officer",
+            field=models.ForeignKey(
+                db_column="OfficerId",
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="officer_villages",
+                to="core.officer",
+            ),
         ),
         migrations.AddField(
-            model_name='userdistrict',
-            name='location',
-            field=models.ForeignKey(db_column='LocationId', on_delete=django.db.models.deletion.DO_NOTHING, to='location.location'),
+            model_name="userdistrict",
+            name="location",
+            field=models.ForeignKey(
+                db_column="LocationId",
+                on_delete=django.db.models.deletion.DO_NOTHING,
+                to="location.location",
+            ),
         ),
         migrations.AddField(
-            model_name='userdistrict',
-            name='user',
-            field=models.ForeignKey(db_column='UserID', on_delete=django.db.models.deletion.DO_NOTHING, to='core.interactiveuser'),
+            model_name="userdistrict",
+            name="user",
+            field=models.ForeignKey(
+                db_column="UserID",
+                on_delete=django.db.models.deletion.DO_NOTHING,
+                to="core.interactiveuser",
+            ),
         ),
         migrations.AlterField(
-            model_name='officervillage',
-            name='validity_from',
-            field=core.fields.DateTimeField(db_column='ValidityFrom', default=datetime.datetime.now),
+            model_name="officervillage",
+            name="validity_from",
+            field=core.fields.DateTimeField(
+                db_column="ValidityFrom", default=datetime.datetime.now
+            ),
         ),
         migrations.AlterField(
-            model_name='userdistrict',
-            name='validity_from',
-            field=core.fields.DateTimeField(db_column='ValidityFrom', default=datetime.datetime.now),
+            model_name="userdistrict",
+            name="validity_from",
+            field=core.fields.DateTimeField(
+                db_column="ValidityFrom", default=datetime.datetime.now
+            ),
         ),
     ]

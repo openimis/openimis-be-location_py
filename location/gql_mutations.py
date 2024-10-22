@@ -45,9 +45,9 @@ class LocationInputType(OpenIMISMutation.Input):
 
 def update_or_create_location(data, user):
     if "client_mutation_id" in data:
-        data.pop('client_mutation_id')
+        data.pop("client_mutation_id")
     if "client_mutation_label" in data:
-        data.pop('client_mutation_label')
+        data.pop("client_mutation_label")
     return LocationService(user).update_or_create(data)
 
 
@@ -55,14 +55,14 @@ class CreateOrUpdateLocationMutation(OpenIMISMutation):
     @classmethod
     def do_mutate(cls, perms, user, **data):
         if type(user) is AnonymousUser or not user.id:
-            raise ValidationError(
-                _("mutation.authentication_required"))
+            raise ValidationError(_("mutation.authentication_required"))
         if not user.has_perms(perms):
             raise PermissionDenied(_("unauthorized"))
 
-        data['audit_user_id'] = user.id_for_audit
+        data["audit_user_id"] = user.id_for_audit
         from core.utils import TimeUtils
-        data['validity_from'] = TimeUtils.now()
+
+        data["validity_from"] = TimeUtils.now()
         update_or_create_location(data, user)
         return None
 
@@ -77,14 +77,22 @@ class CreateLocationMutation(CreateOrUpdateLocationMutation):
     @classmethod
     def async_mutate(cls, user, **data):
 
-        if Location.objects.filter(code=data['code'], type=data['type'], validity_to=None).exists():
+        if Location.objects.filter(
+            code=data["code"], type=data["type"], validity_to=None
+        ).exists():
             raise ValidationError("Location with this code already exists.")
         try:
-            return cls.do_mutate(LocationConfig.gql_mutation_create_locations_perms, user, **data)
+            return cls.do_mutate(
+                LocationConfig.gql_mutation_create_locations_perms, user, **data
+            )
         except Exception as exc:
-            return [{
-                'message': _("location.mutation.failed_to_create_location") % {'code': data['code']},
-                'detail': str(exc)}]
+            return [
+                {
+                    "message": _("location.mutation.failed_to_create_location")
+                    % {"code": data["code"]},
+                    "detail": str(exc),
+                }
+            ]
 
 
 class UpdateLocationMutation(CreateOrUpdateLocationMutation):
@@ -98,21 +106,23 @@ class UpdateLocationMutation(CreateOrUpdateLocationMutation):
     def async_mutate(cls, user, **data):
         try:
             return cls.do_mutate(
-                LocationConfig.gql_mutation_edit_locations_perms,
-                user,
-                **data
+                LocationConfig.gql_mutation_edit_locations_perms, user, **data
             )
         except Exception as exc:
-            return [{
-                'message': _("location.mutation.failed_to_update_location") % {'code': data['code']},
-                'detail': str(exc)}]
+            return [
+                {
+                    "message": _("location.mutation.failed_to_update_location")
+                    % {"code": data["code"]},
+                    "detail": str(exc),
+                }
+            ]
 
 
 def tree_delete(parents, now):
     if parents:
-        children = Location.objects \
-            .filter(parent__in=parents) \
-            # .filter(*filter_validity())
+        children = Location.objects.filter(
+            parent__in=parents
+        )  # .filter(*filter_validity())
         org_children = copy.copy(children)
         children.update(validity_to=now)
         tree_delete(org_children, now)
@@ -132,41 +142,44 @@ class DeleteLocationMutation(OpenIMISMutation):
         try:
             if not user.has_perms(LocationConfig.gql_mutation_delete_locations_perms):
                 raise PermissionDenied(_("unauthorized"))
-            location = Location.objects.get(uuid=data['uuid'])
-            np_uuid = data.get('new_parent_uuid', None)
+            location = Location.objects.get(uuid=data["uuid"])
+            np_uuid = data.get("new_parent_uuid", None)
             from core import datetime
+
             now = datetime.datetime.now()
             if np_uuid:
                 new_parent = Location.objects.get(uuid=np_uuid)
-                Location.objects \
-                    .filter(parent=location) \
-                    .filter(*filter_validity()) \
-                    .update(parent=new_parent)
+                Location.objects.filter(parent=location).filter(
+                    *filter_validity()
+                ).update(parent=new_parent)
             else:
                 tree_delete((location,), now)
 
             location.validity_to = now
             location.save()
-            if location.type == 'D':
+            if location.type == "D":
                 cls.__delete_user_districts(location, now)
             return None
         except Exception as exc:
-            return [{
-                'message': _("location.mutation.failed_to_delete_location") % {'code': data['code']},
-                'detail': str(exc)}]
+            return [
+                {
+                    "message": _("location.mutation.failed_to_delete_location")
+                    % {"code": data["code"]},
+                    "detail": str(exc),
+                }
+            ]
 
     @classmethod
     def __delete_user_districts(cls, location: Location, location_delete_date=None):
-        
+
         if location_delete_date is None:
             from core import datetime
+
             location_delete_date = datetime.datetime.now()
 
-        UserDistrict.objects\
-            .filter(location=location, validity_to__isnull=True)\
-            .update(validity_to=location_delete_date)
-        cache.delete('user_disctrict_'+user.id)
-
+        UserDistrict.objects.filter(location=location, validity_to__isnull=True).update(
+            validity_to=location_delete_date
+        )
 
 
 def tree_reset_types(parent, location, new_level):
@@ -194,21 +207,29 @@ class MoveLocationMutation(OpenIMISMutation):
         try:
             if not user.has_perms(LocationConfig.gql_mutation_move_location_perms):
                 raise PermissionDenied(_("unauthorized"))
-            location = Location.objects.get(uuid=data['uuid'])
+            location = Location.objects.get(uuid=data["uuid"])
             location.save_history()
             level = LocationConfig.location_types.index(location.type)
-            np_uuid = data.get('new_parent_uuid', None)
+            np_uuid = data.get("new_parent_uuid", None)
             new_parent = Location.objects.get(uuid=np_uuid) if np_uuid else None
-            np_level = LocationConfig.location_types.index(new_parent.type) if new_parent else -1
+            np_level = (
+                LocationConfig.location_types.index(new_parent.type)
+                if new_parent
+                else -1
+            )
             location.parent = new_parent
             if np_level < level - 1 or np_level >= level:
                 tree_reset_types(new_parent, location, np_level + 1)
             location.save()
             return None
         except Exception as exc:
-            return [{
-                'message': _("location.mutation.failed_to_move_location") % {'code': data['code']},
-                'detail': str(exc)}]
+            return [
+                {
+                    "message": _("location.mutation.failed_to_move_location")
+                    % {"code": data["code"]},
+                    "detail": str(exc),
+                }
+            ]
 
 
 class HealthFacilityCodeInputType(graphene.String):
@@ -260,9 +281,9 @@ class HealthFacilityInputType(OpenIMISMutation.Input):
 
 def update_or_create_health_facility(data, user):
     if "client_mutation_id" in data:
-        data.pop('client_mutation_id')
+        data.pop("client_mutation_id")
     if "client_mutation_label" in data:
-        data.pop('client_mutation_label')
+        data.pop("client_mutation_label")
     return HealthFacilityService(user).update_or_create(data)
 
 
@@ -276,24 +297,29 @@ class CreateHealthFacilityMutation(OpenIMISMutation):
     @classmethod
     def async_mutate(cls, user, **data):
         try:
-            if HealthFacilityService.check_unique_code(data.get('code')):
-                raise ValidationError(
-                    _("mutation.hf_code_duplicated"))
+            if HealthFacilityService.check_unique_code(data.get("code")):
+                raise ValidationError(_("mutation.hf_code_duplicated"))
             if type(user) is AnonymousUser or not user.id:
-                raise ValidationError(
-                    _("mutation.authentication_required"))
-            if not user.has_perms(LocationConfig.gql_mutation_create_health_facilities_perms):
+                raise ValidationError(_("mutation.authentication_required"))
+            if not user.has_perms(
+                LocationConfig.gql_mutation_create_health_facilities_perms
+            ):
                 raise PermissionDenied(_("unauthorized"))
 
-            data['audit_user_id'] = user.id_for_audit
+            data["audit_user_id"] = user.id_for_audit
             from core.utils import TimeUtils
-            data['validity_from'] = TimeUtils.now()
+
+            data["validity_from"] = TimeUtils.now()
             update_or_create_health_facility(data, user)
             return None
         except Exception as exc:
-            return [{
-                'message': _("location.mutation.failed_to_create_health_facility") % {'code': data['code']},
-                'detail': str(exc)}]
+            return [
+                {
+                    "message": _("location.mutation.failed_to_create_health_facility")
+                    % {"code": data["code"]},
+                    "detail": str(exc),
+                }
+            ]
 
 
 class UpdateHealthFacilityMutation(OpenIMISMutation):
@@ -307,27 +333,32 @@ class UpdateHealthFacilityMutation(OpenIMISMutation):
     def async_mutate(cls, user, **data):
         try:
             if type(user) is AnonymousUser or not user.id:
-                raise ValidationError(
-                    _("mutation.authentication_required"))
-            if not user.has_perms(LocationConfig.gql_mutation_edit_health_facilities_perms):
+                raise ValidationError(_("mutation.authentication_required"))
+            if not user.has_perms(
+                LocationConfig.gql_mutation_edit_health_facilities_perms
+            ):
                 raise PermissionDenied(_("unauthorized"))
 
-            incoming_HF_code = data['code']
-            current_HF = HealthFacility.objects.get(uuid=data['uuid'])
+            incoming_HF_code = data["code"]
+            current_HF = HealthFacility.objects.get(uuid=data["uuid"])
             if current_HF.code != incoming_HF_code:
                 if HealthFacilityService.check_unique_code(incoming_HF_code):
-                    raise ValidationError(
-                        _("mutation.hf_code_duplicated"))
+                    raise ValidationError(_("mutation.hf_code_duplicated"))
 
-            data['audit_user_id'] = user.id_for_audit
+            data["audit_user_id"] = user.id_for_audit
             from core.utils import TimeUtils
-            data['validity_from'] = TimeUtils.now()
+
+            data["validity_from"] = TimeUtils.now()
             update_or_create_health_facility(data, user)
             return None
         except Exception as exc:
-            return [{
-                'message': _("location.mutation.failed_to_update_health_facility") % {'code': data['code']},
-                'detail': str(exc)}]
+            return [
+                {
+                    "message": _("location.mutation.failed_to_update_health_facility")
+                    % {"code": data["code"]},
+                    "detail": str(exc),
+                }
+            ]
 
 
 class DeleteHealthFacilityMutation(OpenIMISMutation):
@@ -341,16 +372,23 @@ class DeleteHealthFacilityMutation(OpenIMISMutation):
     @classmethod
     def async_mutate(cls, user, **data):
         try:
-            if not user.has_perms(LocationConfig.gql_mutation_delete_health_facilities_perms):
+            if not user.has_perms(
+                LocationConfig.gql_mutation_delete_health_facilities_perms
+            ):
                 raise PermissionDenied(_("unauthorized"))
-            hf = HealthFacility.objects.get(uuid=data['uuid'])
+            hf = HealthFacility.objects.get(uuid=data["uuid"])
 
             from core import datetime
+
             now = datetime.datetime.now()
             hf.validity_to = now
             hf.save()
             return None
         except Exception as exc:
-            return [{
-                'message': _("location.mutation.failed_to_delete_health_facility") % {'code': data['code']},
-                'detail': str(exc)}]
+            return [
+                {
+                    "message": _("location.mutation.failed_to_delete_health_facility")
+                    % {"code": data["code"]},
+                    "detail": str(exc),
+                }
+            ]
