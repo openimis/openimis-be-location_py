@@ -206,8 +206,6 @@ class LocationManager(models.Manager):
         return list(qsr)
 
     def get_allowed_ids(self, user, strict=True):
-        if user.is_superuser or not settings.ROW_SECURITY:
-            return True
         if hasattr(user, "_u"):
             user = user._u
         cache_name = f"user_locations_{user.id}"
@@ -233,6 +231,8 @@ class LocationManager(models.Manager):
         return allowed
 
     def is_allowed(self, user, locations_id, strict=True):
+        if user.is_superuser or not settings.ROW_SECURITY:
+            return True
         allowed = self.get_allowed_ids(user, strict)
         return all(
             [loc in extend_allowed_locations(allowed, strict) for loc in locations_id]
