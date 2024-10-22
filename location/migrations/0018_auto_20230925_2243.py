@@ -6,18 +6,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('location', '0017_healthfacility_status'),
+        ("location", "0017_healthfacility_status"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='healthfacility',
-            name='contract_end_date',
-            field=models.DateField(blank=True, db_column='ContractEndDate', null=True),
+            model_name="healthfacility",
+            name="contract_end_date",
+            field=models.DateField(blank=True, db_column="ContractEndDate", null=True),
         ),
         migrations.AlterField(
-            model_name='healthfacility',
-            name='contract_start_date',
-            field=models.DateField(blank=True, db_column='ContractStartDate', null=True),
+            model_name="healthfacility",
+            name="contract_start_date",
+            field=models.DateField(
+                blank=True, db_column="ContractStartDate", null=True
+            ),
         ),
     ]

@@ -3,7 +3,7 @@ from django.apps import AppConfig
 MODULE_NAME = "location"
 
 DEFAULT_CFG = {
-    "location_types": ['R', 'D', 'W', 'V'],
+    "location_types": ["R", "D", "W", "V"],
     "gql_query_locations_perms": ["121901"],
     "gql_query_health_facilities_perms": ["121101"],
     "gql_mutation_create_locations_perms": ["121902"],
@@ -28,7 +28,7 @@ DEFAULT_CFG = {
             "display": "Hospital",
         },
     ],
-    "health_facility_contract_dates_mandatory": False
+    "health_facility_contract_dates_mandatory": False,
 }
 
 

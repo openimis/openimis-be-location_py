@@ -10,7 +10,12 @@ from django.utils.translation import gettext as _
 
 from core.signals import register_service_signal
 from location.apps import LocationConfig
-from location.models import Location, HealthFacility, HealthFacilityCatchment, UserDistrict
+from location.models import (
+    Location,
+    HealthFacility,
+    HealthFacilityCatchment,
+    UserDistrict,
+)
 
 
 def check_authentication(function):
@@ -28,7 +33,9 @@ def check_authentication(function):
     return wrapper
 
 
-def get_ancestor_location_filter(ancestor_uuid: Union[str, UUID], location_field='location', levels=4) -> Q:
+def get_ancestor_location_filter(
+    ancestor_uuid: Union[str, UUID], location_field="location", levels=4
+) -> Q:
     """
     A generic service that return a Q object that can be used to filter if a model belongs to a location
     or any of its children.
@@ -38,10 +45,19 @@ def get_ancestor_location_filter(ancestor_uuid: Union[str, UUID], location_field
     :param levels: The number of location levels to search up. Should not change until location rework.
     :return: Q object that checks parent locations "levels" levels deep
     """
-    filters = Q(**{location_field + '__uuid': ancestor_uuid, location_field + '__validity_to__isnull': True})
+    filters = Q(
+        **{
+            location_field + "__uuid": ancestor_uuid,
+            location_field + "__validity_to__isnull": True,
+        }
+    )
     for i in range(1, levels):
-        filters = filters | Q(**{location_field + '__parent' * i + '__uuid': ancestor_uuid,
-                                 location_field + '__parent' * i + '__validity_to__isnull': True})
+        filters = filters | Q(
+            **{
+                location_field + "__parent" * i + "__uuid": ancestor_uuid,
+                location_field + "__parent" * i + "__validity_to__isnull": True,
+            }
+        )
     return filters
 
 
@@ -79,11 +95,11 @@ class LocationService:
 
         return error
 
-    @register_service_signal('location_service.update_or_create')
+    @register_service_signal("location_service.update_or_create")
     def update_or_create(self, data):
-        location_uuid = data.pop('uuid') if 'uuid' in data else None
-        parent_uuid = data.pop('parent_uuid') if 'parent_uuid' in data else None
-        incoming_code = data.get('code')
+        location_uuid = data.pop("uuid") if "uuid" in data else None
+        parent_uuid = data.pop("parent_uuid") if "parent_uuid" in data else None
+        incoming_code = data.get("code")
         current_location = Location.objects.filter(uuid=location_uuid).first()
         current_code = current_location.code if current_location else None
         if current_code != incoming_code:
@@ -91,7 +107,7 @@ class LocationService:
                 raise ValidationError(_("mutation.location_code_duplicated"))
         # update_or_create(uuid=location_uuid, ...)
         # doesn't work because of explicit attempt to set null to uuid!
-        self._check_users_locations_rights(data['type'])
+        self._check_users_locations_rights(data["type"])
         if location_uuid:
             location = Location.objects.get(uuid=location_uuid)
             self._reset_location_before_update(location)
@@ -109,21 +125,18 @@ class LocationService:
         self._ensure_user_belongs_to_district(location)
 
     def _check_users_locations_rights(self, loc_type):
-        if self.user.is_superuser \
-                or self.user.has_perms(
+        if self.user.is_superuser or self.user.has_perms(
             LocationConfig.gql_mutation_create_region_locations_perms
         ):
             pass
-        elif loc_type in ['R', 'D']:
-            raise PermissionDenied(_(
-                "unauthorized_to_create_update_region_district"
-            ))
+        elif loc_type in ["R", "D"]:
+            raise PermissionDenied(_("unauthorized_to_create_update_region_district"))
         elif not self.user.has_perms(
-                LocationConfig.gql_mutation_create_locations_perms
+            LocationConfig.gql_mutation_create_locations_perms
         ):
-            raise PermissionDenied(_(
-                "unauthorized_to_create_or_update_municipalities_and_villages"
-            ))
+            raise PermissionDenied(
+                _("unauthorized_to_create_or_update_municipalities_and_villages")
+            )
 
     @staticmethod
     def _reset_location_before_update(location):
@@ -133,7 +146,7 @@ class LocationService:
         location.families = None
 
     def _ensure_user_belongs_to_district(self, location: Location):
-        if location.type == 'D':
+        if location.type == "D":
             UserDistrict.objects.get_or_create(
                 user=self.user.i_user,
                 location=location,
@@ -151,7 +164,7 @@ class HealthFacilityService:
             return [{"message": "Health facility code %s already exists" % code}]
         return []
 
-    @register_service_signal('health_facility_service.update_or_create')
+    @register_service_signal("health_facility_service.update_or_create")
     def update_or_create(self, data):
         contract_start_date = data.get("contract_start_date", None)
         contract_end_date = data.get("contract_end_date", None)
@@ -160,12 +173,16 @@ class HealthFacilityService:
                 raise ValidationError(_("mutation.contract_dates_required"))
         if bool(contract_start_date) ^ bool(contract_end_date):
             raise ValidationError(_("mutation.single_date_hf_contract"))
-        if contract_start_date and contract_end_date and contract_end_date <= contract_start_date:
+        if (
+            contract_start_date and contract_end_date and contract_end_date <= contract_start_date
+        ):
             raise ValidationError(_("mutation.incorrect_hf_contract_date_range"))
-        if 'status' in data and data['status'] not in HealthFacility.HealthFacilityStatus:
+        if (
+            "status" in data and data["status"] not in HealthFacility.HealthFacilityStatus
+        ):
             raise ValidationError(_("mutation.incorrect_hf_status"))
-        hf_uuid = data.pop('uuid') if 'uuid' in data else None
-        catchments = data.pop('catchments') if 'catchments' in data else []
+        hf_uuid = data.pop("uuid") if "uuid" in data else None
+        catchments = data.pop("catchments") if "catchments" in data else []
         # address may be multiline > sent as JSON
         # update_or_create(uuid=location_uuid, ...)
         # doesn't work because of explicit attempt to set null to uuid!
@@ -188,8 +205,9 @@ class HealthFacilityService:
     def _process_catchments(self, data_catchments, prev_hf_id, hf_id, catchments):
         prev_catchments = [c.id for c in catchments.all()]
         from core.utils import TimeUtils
+
         for catchment in data_catchments:
-            catchment_id = catchment.pop('id') if 'id' in catchment else None
+            catchment_id = catchment.pop("id") if "id" in catchment else None
             if catchment_id:
                 prev_catchments.remove(catchment_id)
                 prev_catchment = catchments.filter(id=catchment_id, **catchment).first()
@@ -199,20 +217,20 @@ class HealthFacilityService:
                     prev_catchment.health_facility_id = prev_hf_id
                     prev_catchment.save()
                     # ... and create a new one with the new values
-                    catchment['validity_from'] = TimeUtils.now()
-                    catchment['audit_user_id'] = self.user.id_for_audit
-                    catchment['health_facility_id'] = hf_id
+                    catchment["validity_from"] = TimeUtils.now()
+                    catchment["audit_user_id"] = self.user.id_for_audit
+                    catchment["health_facility_id"] = hf_id
                     HealthFacilityCatchment.objects.create(**catchment)
             else:
-                catchment['validity_from'] = TimeUtils.now()
-                catchment['audit_user_id'] = self.user.id_for_audit
-                catchment['health_facility_id'] = hf_id
+                catchment["validity_from"] = TimeUtils.now()
+                catchment["audit_user_id"] = self.user.id_for_audit
+                catchment["health_facility_id"] = hf_id
                 HealthFacilityCatchment.objects.create(**catchment)
 
         if prev_catchments:
             catchments.filter(id__in=prev_catchments).update(
-                health_facility_id=prev_hf_id,
-                validity_to=TimeUtils.now())
+                health_facility_id=prev_hf_id, validity_to=TimeUtils.now()
+            )
 
     @staticmethod
     def _reset_health_facility_before_update(hf):
