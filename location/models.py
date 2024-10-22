@@ -75,12 +75,12 @@ class LocationManager(models.Manager):
 
     def allowed(self, user_id, loc_types=["R", "D", "W", "V"], strict=True, qs=False):
         strict_sql = """
-        'AND (
+        AND (
             SELECT COUNT(*) FROM USER_LOC  ul
             WHERE ul."ParentLocationId" = parent."LocationId" ) =  (
                 SELECT COUNT(*) FROM "tblLocations" l
                 WHERE l."ParentLocationId" = parent."LocationId" AND l."ValidityTo" is Null
-            )'
+            )
         """
         query = f"""
             WITH {"" if settings.MSSQL else "RECURSIVE"} USER_LOC AS

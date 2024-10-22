@@ -568,7 +568,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         )
         self.assertEquals(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
-        self.assertNotNone(content)
+        self.assertIsNotNone(content)
         self.assertResponseNoErrors(response)
 
     def test_user_districts_admin(self):
@@ -587,7 +587,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         )
         self.assertEquals(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
-        self.assertNotNone(content)
+        self.assertIsNotNone(content)
         self.assertResponseNoErrors(response)
 
     def test_user_districts_not_admin(self):
@@ -606,7 +606,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         )
         self.assertEquals(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
-        self.assertNotNone(content)
+        self.assertIsNotNone(content)
 
         self.assertResponseNoErrors(response)
 
@@ -637,5 +637,5 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         )
         self.assertEquals(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
-        self.assertNotNone(content)
+        self.assertIsNotNone(content)
         self.assertResponseNoErrors(response)

@@ -8,21 +8,26 @@ from django.core.exceptions import PermissionDenied
 from graphene_django.filter import DjangoFilterConnectionField
 from location.gql_mutations import (
     CreateHealthFacilityMutation,
-    MoveLocationMutation,
     DeleteHealthFacilityMutation,
     UpdateHealthFacilityMutation,
-    LocationMutation,
-    HealthFacilityMutation,
     CreateLocationMutation,
     UpdateLocationMutation,
-    DeleteLocationMutation
+    DeleteLocationMutation,
+    MoveLocationMutation
 )
 from location.gql_queries import (
     UserDistrictGQLType,
     LocationGQLType,
     HealthFacilityGQLType,
 )
-from location.models import HealthFacility, Location, LocationManager, UserDistrict
+from location.models import (
+    HealthFacility,
+    Location,
+    LocationManager,
+    UserDistrict,
+    LocationMutation,
+    HealthFacilityMutation,
+)
 from location.services import LocationService, HealthFacilityService
 from location.apps import LocationConfig
 import graphene
