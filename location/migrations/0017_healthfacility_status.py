@@ -6,13 +6,22 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('location', '0016_auto_20230816_0934'),
+        ("location", "0016_auto_20230816_0934"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='healthfacility',
-            name='status',
-            field=models.CharField(choices=[('AC', 'Active'), ('IN', 'Inactive'), ('DE', 'Delisted'), ('ID', 'Idle')], default='AC', max_length=2),
+            model_name="healthfacility",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("AC", "Active"),
+                    ("IN", "Inactive"),
+                    ("DE", "Delisted"),
+                    ("ID", "Idle"),
+                ],
+                default="AC",
+                max_length=2,
+            ),
         ),
     ]

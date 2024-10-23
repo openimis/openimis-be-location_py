@@ -6,18 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('location', '0012_auto_20230317_0927'),
+        ("location", "0012_auto_20230317_0927"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='healthfacility',
-            name='json_ext',
-            field=models.JSONField(blank=True, db_column='JsonExt', null=True),
+            model_name="healthfacility",
+            name="json_ext",
+            field=models.JSONField(blank=True, db_column="JsonExt", null=True),
         ),
         migrations.AddField(
-            model_name='location',
-            name='json_ext',
-            field=models.JSONField(blank=True, db_column='JsonExt', null=True),
+            model_name="location",
+            name="json_ext",
+            field=models.JSONField(blank=True, db_column="JsonExt", null=True),
         ),
     ]
