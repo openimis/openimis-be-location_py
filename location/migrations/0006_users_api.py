@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     dependencies = [
         (
             "location",
-            "0005_healthfacilitycatchment_healthfacilitylegalform_healthfacilitymutation_healthfacilitysublevel",
+            "0005_20191212_1415",
         ),
     ]
 

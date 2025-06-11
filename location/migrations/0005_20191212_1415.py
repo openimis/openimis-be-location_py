@@ -11,6 +11,9 @@ class Migration(migrations.Migration):
         ("core", "0009_mutationlog_client_mutation_details"),
         ("location", "0004_locationmutation"),
     ]
+    replaces = [
+        ('location', "0005_healthfacilitycatchment_healthfacilitylegalform_healthfacilitymutation_healthfacilitysublevel")
+    ]
 
     operations = [
         migrations.CreateModel(
