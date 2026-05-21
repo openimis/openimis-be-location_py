@@ -40,31 +40,31 @@ msgstr "User not authorized for this operation"
 
 #: location/location/gql_mutations.py:93 location/gql_mutations.py:84
 msgid "location.mutation.failed_to_create_location"
-msgstr "Failed create location %(code)"
+msgstr "Failed create location %(code)s"
 
 #: location/location/gql_mutations.py:120 location/gql_mutations.py:105
 msgid "location.mutation.failed_to_update_location"
-msgstr "Failed to update location %(code)"
+msgstr "Failed to update location %(code)s"
 
 #: location/location/gql_mutations.py:165 location/gql_mutations.py:153
 msgid "location.mutation.failed_to_delete_location"
-msgstr "Failed delete location %(code)"
+msgstr "Failed delete location %(code)s"
 
 #: location/location/gql_mutations.py:207 location/gql_mutations.py:205
 msgid "location.mutation.failed_to_move_location"
-msgstr "Failed to move location %(code)"
+msgstr "Failed to move location %(code)s"
 
 #: location/location/gql_mutations.py:352 location/gql_mutations.py:290
 msgid "location.mutation.failed_to_create_health_facility"
-msgstr "Failed create health facility %(code)"
+msgstr "Failed create health facility %(code)s"
 
 #: location/location/gql_mutations.py:379 location/gql_mutations.py:324
 msgid "location.mutation.failed_to_update_health_facility"
-msgstr "Failed to update health facility %(code)"
+msgstr "Failed to update health facility %(code)s"
 
 #: location/location/gql_mutations.py:405 location/gql_mutations.py:350
 msgid "location.mutation.failed_to_delete_health_facility"
-msgstr "Failed delete health facility %(code)"
+msgstr "Failed delete health facility %(code)s"
 
 #: location/services.py:91
 msgid "mutation.location_code_duplicated"
