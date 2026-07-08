@@ -32,12 +32,12 @@ def extract_and_drop_views(apps, schema_editor):
 def _extract_postgresql_views():
     global view_definitions
     with connection.cursor() as cursor:
-        query = """
+        query = f"""
             SELECT viewname, definition
             FROM pg_views
-            WHERE schemaname = 'public' AND viewname IN %s;
+            WHERE schemaname = 'public' AND viewname IN {tuple(DEPENDENT_VIEWS)};
         """
-        cursor.execute(query, (tuple(DEPENDENT_VIEWS),))
+        cursor.execute(query)
         for name, definition in cursor.fetchall():
             view_definitions[name] = f'CREATE OR REPLACE VIEW "public"."{name}" AS {definition}'
 
