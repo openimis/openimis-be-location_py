@@ -33,4 +33,3 @@ class HealthFacilitySubLevelAdmin(admin.ModelAdmin):
         if obj:
             return ["code"]
         return []
-
