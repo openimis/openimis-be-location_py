@@ -1,18 +1,18 @@
-import string
-import random
 from location.models import (
     Location,
     UserDistrict,
     HealthFacility,
-    HealthFacilityLegalForm,
-    HealthFacilitySubLevel,
     HealthFacilityCatchment,
 )
-
-
-def generate_random_string(length=6):
-    letters = string.ascii_uppercase
-    return "".join(random.choice(letters) for i in range(length))
+from location.test_factories import (
+    generate_random_string,
+    HealthFacilityCatchmentFactory,
+    HealthFacilityFactory,
+    HealthFacilityLegalFormFactory,
+    HealthFacilitySubLevelFactory,
+    LocationFactory,
+    VillageFactory,
+)
 
 
 def assign_user_districts(user, district_codes):
@@ -28,33 +28,25 @@ def assign_user_districts(user, district_codes):
 
 
 def create_test_location(loc_type, valid=True, custom_props=None):
-    if custom_props is None:
-        custom_props = {}
-    else:
-        custom_props = {k: v for k, v in custom_props.items() if hasattr(Location, k)}
-    code = "TST-" + loc_type
-    if "code" in custom_props:
-        code = custom_props.pop("code")
+    custom_props = {
+        k: v for k, v in (custom_props or {}).items() if hasattr(Location, k)
+    }
+    code = custom_props.pop("code", "TST-" + loc_type)
     location = Location.objects.filter(code=code, validity_to__isnull=valid).first()
     if location is not None:
         return location
-    else:
-        return Location.objects.create(
-            **{
-                "code": code,
-                "type": loc_type,
-                "name": "Test location " + loc_type,
-                "validity_from": "2019-06-01",
-                "validity_to": None if valid else "2019-06-01",
-                "audit_user_id": -1,
-                **custom_props,
-            }
-        )
+    return LocationFactory(
+        **{
+            "code": code,
+            "type": loc_type,
+            "validity_to": None if valid else "2019-06-01",
+            **custom_props,
+        }
+    )
 
 
 def create_test_village(custom_props=None):
-    if custom_props is None:
-        custom_props = {}
+    custom_props = custom_props or {}
 
     code = custom_props.get("code", generate_random_string())
     if code:
@@ -62,35 +54,10 @@ def create_test_village(custom_props=None):
         if location:
             return location
 
-    name = custom_props.get("name", "Test Village " + code)
-    custom_props["name"] = name
-    test_region = create_test_location(
-        "R",
-        custom_props={
-            "name": "Region " + name,
-            "code": f"R-{code}",
-        },
-    )
-    test_district = create_test_location(
-        "D",
-        custom_props={
-            "parent": test_region,
-            "name": "District " + name,
-            "code": f"D-{code}",
-        },
-    )
-    test_ward = create_test_location(
-        "W",
-        custom_props={
-            "parent": test_district,
-            "name": "Ward " + name,
-            "code": f"W-{code}",
-        },
-    )
-    custom_props["parent"] = test_ward
-    test_village = create_test_location("V", custom_props=custom_props)
-
-    return test_village
+    props = {k: v for k, v in custom_props.items() if hasattr(Location, k)}
+    props["code"] = code
+    props.setdefault("name", "Test Village " + code)
+    return VillageFactory(**{"base_code": code, "base_name": props["name"], **props})
 
 
 def create_test_basic_health_facility_legal_form():
@@ -102,14 +69,9 @@ def create_test_basic_health_facility_legal_form():
 
 def create_test_health_facility_legal_form(code="C", legal_form="Company", sort_order=1):
     """Create a test health facility legal form if it doesn't exist."""
-    obj, created = HealthFacilityLegalForm.objects.get_or_create(
-        code=code,
-        defaults={
-            "legal_form": legal_form,
-            "sort_order": sort_order,
-        }
+    return HealthFacilityLegalFormFactory(
+        code=code, legal_form=legal_form, sort_order=sort_order
     )
-    return obj
 
 
 def create_test_basic_health_facility_sub_level():
@@ -120,91 +82,55 @@ def create_test_basic_health_facility_sub_level():
 
 def create_test_health_facility_sub_level(code="S", health_facility_sub_level="Standard", sort_order=1):
     """Create a test health facility sub-level if it doesn't exist."""
-    obj, created = HealthFacilitySubLevel.objects.get_or_create(
-        code=code,
-        defaults={
-            "health_facility_sub_level": health_facility_sub_level,
-            "sort_order": sort_order,
-        }
+    return HealthFacilitySubLevelFactory(
+        code=code, health_facility_sub_level=health_facility_sub_level, sort_order=sort_order
     )
-    return obj
 
 
 def create_test_health_facility(
     code=None, location_id=None, valid=True, custom_props=None
 ):
-    if custom_props is None:
-        custom_props = {}
-    else:
-        custom_props = {
-            k: v for k, v in custom_props.items() if hasattr(HealthFacility, k)
-        }
-
-    if custom_props is not None and "code" in custom_props:
-        code = custom_props.pop("code")
-    elif not code:
-        code = "TST-HF"
+    custom_props = {
+        k: v for k, v in (custom_props or {}).items() if hasattr(HealthFacility, k)
+    }
+    code = custom_props.pop("code", code or "TST-HF")
     if location_id:
         custom_props["location_id"] = location_id
-    elif (
-        location_id is None and "location" not in custom_props and "location_id" not in custom_props
-    ):
+    elif "location" not in custom_props and "location_id" not in custom_props:
         location = Location.objects.filter(type="D", validity_to__isnull=True).first()
         custom_props["location"] = location or create_test_location("D")
 
-    # Ensure required reference data exists
+    # resolved here rather than left to the factory: the update branch below has to carry
+    # them too, and it never reaches the factory
     if not custom_props.get("legal_form"):
-        legal_form = create_test_health_facility_legal_form()
-        custom_props["legal_form"] = legal_form
-
+        custom_props["legal_form"] = create_test_health_facility_legal_form()
     if not custom_props.get("sub_level") and "sub_level" not in custom_props:
-        # Only set sub_level if not explicitly set to None
-        sub_level = create_test_health_facility_sub_level()
-        custom_props["sub_level"] = sub_level
+        custom_props["sub_level"] = create_test_health_facility_sub_level()
 
     obj = HealthFacility.objects.filter(code=code, validity_to__isnull=valid).first()
     if obj is not None:
         if custom_props:
             HealthFacility.objects.filter(id=obj.id).update(**custom_props)
             obj.refresh_from_db()
-    else:
-        obj = HealthFacility.objects.create(
-            **{
-                "code": code,
-                "level": "H",
-                "name": "Test location " + code,
-                "care_type": "B",
-                "validity_from": "2019-01-01",
-                "validity_to": None if valid else "2019-06-01",
-                "audit_user_id": -1,
-                "offline": False,
-                **custom_props,
-            }
-        )
-    # reseting custom props to avoid having it in next calls
-    return obj
-
-
-def create_test_health_catchment(hf, location, custom_props=None):
-    if custom_props is None:
-        custom_props = {}
-    else:
-        custom_props = {
-            k: v for k, v in custom_props.items() if hasattr(HealthFacilityCatchment, k)
-        }
-    obj = HealthFacilityCatchment.objects.create(
+        return obj
+    return HealthFacilityFactory(
         **{
-            "location": location,
-            "health_facility": hf,
-            "catchment": 100,
-            "validity_from": "2019-01-01",
-            "validity_to": None,
-            "audit_user_id": -1,
+            "code": code,
+            "validity_to": None if valid else "2019-06-01",
             **custom_props,
         }
     )
 
-    return obj
+
+def create_test_health_catchment(hf, location, custom_props=None):
+    custom_props = {
+        k: v
+        for k, v in (custom_props or {}).items()
+        if hasattr(HealthFacilityCatchment, k)
+    }
+    return HealthFacilityCatchmentFactory(
+        **{"location": location, "health_facility": hf, **custom_props}
+    )
 
 
 def create_basic_test_locations():
