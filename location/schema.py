@@ -19,9 +19,13 @@ from location.gql_queries import (
     UserDistrictGQLType,
     LocationGQLType,
     HealthFacilityGQLType,
+    HealthFacilityLegalFormGQLType,
+    HealthFacilitySubLevelGQLType,
 )
 from location.models import (
     HealthFacility,
+    HealthFacilityLegalForm,
+    HealthFacilitySubLevel,
     Location,
     LocationManager,
     UserDistrict,
@@ -77,6 +81,14 @@ class Query(graphene.ObjectType):
         graphene.Boolean,
         health_facility_code=graphene.String(required=True),
         description="Checks that the specified health facility code is unique.",
+    )
+    health_facility_legal_forms = graphene.List(
+        HealthFacilityLegalFormGQLType,
+        description="Returns all health facility legal forms.",
+    )
+    health_facility_sub_levels = graphene.List(
+        HealthFacilitySubLevelGQLType,
+        description="Returns all health facility sub levels.",
     )
 
     def resolve_health_facilities(self, info, **kwargs):
@@ -175,6 +187,16 @@ class Query(graphene.ObjectType):
             UserDistrictGQLType(d)
             for d in UserDistrict.get_user_districts(info.context.user._u)
         ]
+
+    def resolve_health_facility_legal_forms(self, info, **kwargs):
+        if info.context.user.is_anonymous:
+            raise PermissionDenied(_("unauthorized"))
+        return HealthFacilityLegalForm.objects.all().order_by("sort_order", "code")
+
+    def resolve_health_facility_sub_levels(self, info, **kwargs):
+        if info.context.user.is_anonymous:
+            raise PermissionDenied(_("unauthorized"))
+        return HealthFacilitySubLevel.objects.all().order_by("sort_order", "code")
 
     def resolve_officer_locations(self, info, **kwargs):
         if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
