@@ -121,35 +121,21 @@ class LocationManager(models.Manager):
 
 
     def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset=None, loc_types=['R', 'D', 'W', 'V']):
-        q_allowed_location = None
-        if not isinstance(user, core_models.InteractiveUser):
-            logger.warning(f"Access without filter for user {user.id} ")
-            if queryset:
-                return queryset
-            else:
-                return Q()
-        elif not user.is_imis_admin:
-            q_allowed_location = Q((f"{prefix}__in", self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull", True))
+        """
+        The row filter for `user` on a path pointing at a Location.
 
-            if queryset:
-                return queryset.filter(q_allowed_location)
-            else:
-                return q_allowed_location
-        else:
-            if queryset:
-                return queryset
-            else:
-                return Q()
+        Two things narrow a user: the districts they are assigned to
+        (`tblUsersDistricts`, through `allowed`) and, when they hold any, their UBA
+        credentials. They are AND'ed: a credential narrows *within* the assigned
+        districts, it never grants access outside them. A user holding no location aware
+        credential keeps the plain district filter, which is why
+        `build_uba_location_filter_query` answers None rather than an empty filter.
 
-
-
-    def get_location_from_ids(self, qsr, loc_type):
-        if loc_type:
-            return [x for x in list(qsr) if x.type == loc_type]
-        return list(qsr)
-
-
-    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset=None, loc_types=['R', 'D', 'W', 'V']):
+        Every caller gets this for free, so a module never restates the UBA rule: the
+        path from the model it filters to the linked object is worked out from the
+        credential's registry `params`. It also means the rule reaches the REST/FHIR API,
+        which calls the same `Model.get_queryset`.
+        """
         q_allowed_location = None
         if not isinstance(user, core_models.InteractiveUser):
             logger.warning(f"Access without filter for user {user.id} ")
@@ -159,6 +145,9 @@ class LocationManager(models.Manager):
                 return Q()
         elif not user.is_imis_admin:
             q_allowed_location = Q((f"{prefix}__in", self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull", True))
+            q_uba = self.build_uba_location_filter_query(user, prefix=prefix, loc_types=loc_types)
+            if q_uba is not None:
+                q_allowed_location &= q_uba
 
             if queryset is not None:
                 return queryset.filter(q_allowed_location)
@@ -169,6 +158,159 @@ class LocationManager(models.Manager):
                 return queryset
             else:
                 return Q()
+
+    # --- UBA aware narrowing ---------------------------------------------------- #
+
+    def build_uba_location_filter_query(self, user, prefix='location', loc_types=('R', 'D', 'W', 'V')):
+        """
+        The narrowing the UBA credentials of `user` imply on `prefix`.
+
+        One term per location aware credential they actually hold a link on, OR'ed
+        together: holding an ENROLMENT link on a village and a CLAIM_ADMIN link on a
+        health facility widens what they see rather than intersecting it.
+
+        None when they hold no such link, so that the caller keeps its district filter
+        instead of AND'ing with something that matches nothing.
+        """
+        from core.uba_filters import business_access_object_ids
+        from core.uba_link_types import get_location_aware_uba_link_types
+
+        prefix_type = self._prefix_location_type(loc_types)
+        q_uba = None
+        for link_type in get_location_aware_uba_link_types():
+            model_label = link_type.models[0] if link_type.models else None
+            object_ids = business_access_object_ids(user, link_type.code, model_label)
+            if not object_ids:
+                continue
+            term = self._uba_link_type_filter_query(link_type, object_ids, prefix, prefix_type)
+            if term is None:
+                # the credential says nothing about this path, e.g. a health facility
+                # credential on a queryset that never reaches a health facility
+                continue
+            q_uba = term if q_uba is None else q_uba | term
+        return q_uba
+
+    def _uba_link_type_filter_query(self, link_type, object_ids, prefix, prefix_type):
+        """
+        Turn one credential into a filter on `prefix`, using its registry `params`.
+
+        `location_field` means the credential is held on a model hanging off a location,
+        so the path to it is the location path minus that last segment
+        ('health_facility__location' -> 'health_facility'). `location_type` means it is
+        held on a Location, so the path is the location path re-aimed at that type.
+        """
+        from core.uba_filters import uba_filter_from_object_ids
+
+        params = link_type.params
+        location_field = params.get("location_field")
+        if location_field:
+            if prefix == location_field:
+                # the filtered model *is* the one the credential is held on
+                return uba_filter_from_object_ids(object_ids)
+            suffix = f"__{location_field}"
+            if not prefix.endswith(suffix):
+                return None
+            return uba_filter_from_object_ids(object_ids, prefix=prefix[:-len(suffix)])
+
+        location_type = params.get("location_type")
+        configured = list(LocationConfig.location_types) or ['R', 'D', 'W', 'V']
+        if not location_type or not prefix_type:
+            return None
+        if location_type not in configured or prefix_type not in configured:
+            logger.warning(
+                "UBA link type '%s' declares location_type '%s', not in the configured %s",
+                link_type.code, location_type, configured)
+            return None
+        location_ids = self._expand_location_ids(
+            object_ids,
+            descendants=bool(params.get("include_descendants")),
+            ancestors=bool(params.get("include_ancestors")),
+        )
+        delta = configured.index(location_type) - configured.index(prefix_type)
+        path = self._walk_prefix(prefix, delta)
+        if path is not None:
+            return uba_filter_from_object_ids(location_ids, prefix=path)
+        # the path cannot be walked down to the level the credential is held on: compare
+        # what the row does expose, its ancestor at the prefix level. Coarser, but the
+        # narrowing still applies instead of being silently dropped
+        return uba_filter_from_object_ids(
+            self._locations_at_type(location_ids, prefix_type), prefix=prefix)
+
+    @staticmethod
+    def _prefix_location_type(loc_types):
+        """
+        The loc_type the `prefix` points at, taken as the deepest type the caller allows:
+        `loc_types=['D']` goes with a path climbing to the district, the default (every
+        type) with a plain location field.
+        """
+        configured = list(LocationConfig.location_types) or ['R', 'D', 'W', 'V']
+        allowed = [t for t in configured if t in (loc_types or configured)]
+        return allowed[-1] if allowed else None
+
+    @staticmethod
+    def _walk_prefix(prefix, delta):
+        """
+        Re-aim a location path `delta` levels deeper (positive) or shallower (negative).
+
+        A path such as 'location__parent__parent' was built by climbing from the row's own
+        village up to its district, so going back down is dropping trailing '__parent'
+        segments and going up is adding them. None when there is no '__parent' left to
+        drop, the caller then comparing ancestors instead.
+        """
+        if delta == 0:
+            return prefix
+        if delta < 0:
+            return prefix + '__parent' * (-delta)
+        parts = prefix.split('__')
+        if len(parts) <= delta or any(part != 'parent' for part in parts[-delta:]):
+            return None
+        return '__'.join(parts[:-delta])
+
+    @staticmethod
+    def _expand_location_ids(location_ids, descendants=False, ancestors=False):
+        """
+        Widen a set of location ids down and/or up the tree, for the `include_descendants`
+        and `include_ancestors` params: a credential granted on a district can then reach
+        its villages. Walks level by level, the tree being as deep as `location_types`.
+        """
+        ids = {int(object_id) for object_id in location_ids}
+        if descendants:
+            frontier = set(ids)
+            while frontier:
+                frontier = set(Location.objects.filter(
+                    parent_id__in=frontier, *filter_validity()
+                ).values_list('id', flat=True)) - ids
+                ids |= frontier
+        if ancestors:
+            frontier = set(ids)
+            while frontier:
+                frontier = set(Location.objects.filter(
+                    id__in=frontier, *filter_validity()
+                ).exclude(parent__isnull=True).values_list('parent_id', flat=True)) - ids
+                ids |= frontier
+        return ids
+
+    @staticmethod
+    def _locations_at_type(location_ids, loc_type):
+        """
+        The locations of `location_ids`, or their nearest ancestor, sitting at `loc_type`.
+        Used when a path stops above the level a credential is held on.
+        """
+        found, seen = set(), {int(object_id) for object_id in location_ids}
+        frontier = set(seen)
+        while frontier:
+            rows = Location.objects.filter(
+                id__in=frontier, *filter_validity()
+            ).values_list('id', 'type', 'parent_id')
+            next_frontier = set()
+            for location_id, location_type, parent_id in rows:
+                if location_type == loc_type:
+                    found.add(location_id)
+                elif parent_id and parent_id not in seen:
+                    seen.add(parent_id)
+                    next_frontier.add(parent_id)
+            frontier = next_frontier
+        return found
 
 
 
