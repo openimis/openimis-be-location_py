@@ -1,4 +1,5 @@
 import graphene
+from core.apps import CoreConfig
 from .apps import LocationConfig
 from core import assert_string_length
 from core.schema import OpenIMISMutation
@@ -7,6 +8,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils.translation import gettext as _
 from graphene import InputObjectType
+from program import models as program_models
 
 import copy
 
@@ -260,6 +262,7 @@ class HealthFacilityInputType(OpenIMISMutation.Input):
     contract_start_date = graphene.Date(required=False)
     contract_end_date = graphene.Date(required=False)
     status = graphene.String(required=False)
+    program = graphene.List(graphene.Int, required=False)
 
 
 def update_or_create_health_facility(data, user):
@@ -267,6 +270,15 @@ def update_or_create_health_facility(data, user):
         data.pop("client_mutation_id")
     if "client_mutation_label" in data:
         data.pop("client_mutation_label")
+    programs = []
+    if CoreConfig.is_program_available:
+        if 'program' in data:
+            programs = program_models.Program.objects.filter(idProgram__in=data["program"])
+            data.pop('program')
+    value_return = HealthFacilityService(user).update_or_create(data)
+    if programs:
+        value_return.program.set(programs)
+        value_return.save()
     return HealthFacilityService(user).update_or_create(data)
 
 

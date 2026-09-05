@@ -13,6 +13,7 @@ from graphql import ResolveInfo
 from .apps import LocationConfig
 import logging
 from django.db.models import Q
+from program import models as program_models
 
 logger = logging.getLogger(__file__)
 cache = caches["location"]
@@ -528,6 +529,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     contract_end_date = models.DateField(
         db_column="ContractEndDate", blank=True, null=True
     )
+    program = models.ManyToManyField(program_models.Program)
     status = models.CharField(
         max_length=2,
         choices=HealthFacilityStatus.choices,
