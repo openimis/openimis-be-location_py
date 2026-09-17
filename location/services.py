@@ -1,4 +1,6 @@
 import json
+import random
+from datetime import date
 from typing import Union
 from uuid import UUID
 
@@ -23,6 +25,21 @@ from location.models import (
     Catchment,
     CatchmentDistrict,
 )
+
+
+CODE_RANDOM_DIGITS = 5
+CODE_GENERATION_ATTEMPTS = 20
+
+
+def generate_unique_catchment_code(model, current_date=None):
+    """Build a `<year><random 5-digit suffix>` code, retrying on collision."""
+    year = (current_date or date.today()).year
+    for _ in range(CODE_GENERATION_ATTEMPTS):
+        suffix = random.randint(0, 10 ** CODE_RANDOM_DIGITS - 1)
+        code = f"{year}{suffix:0{CODE_RANDOM_DIGITS}d}"
+        if not model.objects.filter(code=code, validity_to__isnull=True).exists():
+            return code
+    raise ValueError("Unable to generate a unique catchment code, please retry.")
 
 
 def check_authentication(function):
@@ -449,6 +466,8 @@ class CatchmentService:
     def update_or_create(self, data):
         district_ids = self.validate_districts(data.pop("district_ids", []))
         catchment_uuid = data.pop("uuid", None)
+        if not catchment_uuid and not data.get("code"):
+            data["code"] = generate_unique_catchment_code(Catchment)
         self.check_unique_code(data["code"], exclude_uuid=catchment_uuid)
 
         if catchment_uuid:

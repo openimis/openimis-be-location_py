@@ -736,6 +736,10 @@ class CatchmentInputType(OpenIMISMutation.Input):
     district_ids = graphene.List(graphene.NonNull(graphene.Int), required=True)
 
 
+class CreateCatchmentInputType(CatchmentInputType):
+    code = graphene.String(required=False)
+
+
 def clean_catchment_mutation_data(data):
     data.pop("client_mutation_id", None)
     data.pop("client_mutation_label", None)
@@ -746,7 +750,7 @@ class CreateCatchmentMutation(OpenIMISMutation):
     _mutation_module = "location"
     _mutation_class = "CreateCatchmentMutation"
 
-    class Input(CatchmentInputType):
+    class Input(CreateCatchmentInputType):
         pass
 
     @classmethod
