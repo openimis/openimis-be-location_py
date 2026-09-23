@@ -12,10 +12,94 @@ from location.models import (
     HealthFacilitySubLevel,
     HealthFacilityCatchment,
     HealthFacility,
+    LocationManager,
     UserDistrict,
     OfficerVillage,
+    extend_allowed_locations,
 )
+from core.models import InteractiveUser
+from django.conf import settings
 from django.db.models import Field
+from core.gql import ScopedQuerysetMixin
+
+
+# Marker for "this user is not location-restricted at all"
+UNRESTRICTED_LOCATIONS = object()
+
+
+def allowed_location_ids(info):
+    """
+    The locations the user may read: the ones they are assigned, their ancestors
+    and their descendants. Memoized on the request, the set is the same for
+    every node of a response.
+    """
+    cached = getattr(info.context, "_allowed_location_ids", None)
+    if cached is not None:
+        return cached
+
+    user = info.context.user
+    interactive_user = getattr(user, "_u", user)
+    if (
+        LocationConfig.no_location_check
+        or not settings.ROW_SECURITY
+        or user.is_superuser
+        or not isinstance(interactive_user, InteractiveUser)
+    ):
+        # Same convention as LocationManager.build_user_location_filter_query:
+        # a user who is not an InteractiveUser is not location-restricted.
+        allowed = UNRESTRICTED_LOCATIONS
+    else:
+        allowed = set(
+            extend_allowed_locations(
+                LocationManager().get_allowed_ids(interactive_user), strict=False
+            )
+        )
+    try:
+        info.context._allowed_location_ids = allowed
+    except AttributeError:
+        pass
+    return allowed
+
+
+def _root_field_name(info):
+    """Name of the root field this resolution started from, alias resolved."""
+    if not info.path:
+        return None
+    response_name = info.path[0]
+    for selection in info.operation.selection_set.selections:
+        name = getattr(selection, "name", None)
+        if name is None:
+            continue
+        alias = getattr(selection, "alias", None)
+        if (alias.value if alias else name.value) == response_name:
+            return name.value
+    return response_name
+
+
+def check_location_readable(info, location_id):
+    """
+    Row security for a single location reached by walking a foreign key.
+
+    Location.get_queryset only bounds the querysets behind the root queries. A
+    field returning one location - a parent, a health facility location - is
+    resolved straight off the model, so without this any node of the tree could
+    be read from any node the user legitimately holds. Reading these needs no
+    right, as a user is entitled to their own locations, but it stays inside
+    their own branch: what they are assigned, above it and below it.
+    """
+    if not info.context.user.is_authenticated:
+        raise PermissionDenied(_("unauthorized"))
+    if location_id is None:
+        return
+    if _root_field_name(info) == "locationsAll":
+        # locationsAll deliberately hands the whole tree to any authenticated
+        # user - see Query.resolve_locations_all and the bypass in
+        # LocationGQLType.get_queryset - so row security on a walk started there
+        # would protect nothing while breaking the callers that rely on it.
+        return
+    allowed = allowed_location_ids(info)
+    if allowed is not UNRESTRICTED_LOCATIONS and location_id not in allowed:
+        raise PermissionDenied(_("unauthorized"))
 
 
 class LocationGQLType(DjangoObjectType):
@@ -23,8 +107,7 @@ class LocationGQLType(DjangoObjectType):
     Field.register_lookup(NotEqual)
 
     def resolve_parent(self, info):
-        if not info.context.user.is_authenticated:
-            raise PermissionDenied(_("unauthorized"))
+        check_location_readable(info, self.parent_id)
         if "location_loader" in info.context.dataloaders and self.parent_id:
             return info.context.dataloaders["location_loader"].load(self.parent_id)
         return self.parent
@@ -73,7 +156,7 @@ class HealthFacilitySubLevelGQLType(DjangoObjectType):
         model = HealthFacilitySubLevel
 
 
-class HealthFacilityCatchmentGQLType(DjangoObjectType):
+class HealthFacilityCatchmentGQLType(ScopedQuerysetMixin, DjangoObjectType):
     class Meta:
         model = HealthFacilityCatchment
 
@@ -102,8 +185,7 @@ class HealthFacilityGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
     def resolve_location(self, info):
-        if not info.context.user.is_authenticated:
-            raise PermissionDenied(_("unauthorized"))
+        check_location_readable(info, self.location_id)
         if "location_loader" in info.context.dataloaders:
             return info.context.dataloaders["location_loader"].load(self.location_id)
 

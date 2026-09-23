@@ -18,15 +18,34 @@ logger = logging.getLogger(__file__)
 cache = caches["location"]
 
 
+USER_LOCATION_CACHE_KEYS = ("user_locations_{}", "user_districts_{}")
+
+
 def free_cache_for_user(user_id="*"):
-    # wildcard only supported for Redis
-    if user_id == "*" and not isinstance(cache, RedisCache):
-        cache.clear()
-    else:
-        cache_name = f"user_locations_{user_id}"
-        cache.delete(cache_name)
-        cache_name = f"user_districts_{user_id}"
-        cache.delete(cache_name)
+    """Drop the cached location and district sets for one user, or for everyone.
+
+    ``user_id="*"`` means everyone, which is what a location change needs: it
+    shifts the expanded set of every user whose branch the location falls
+    under, not only of users whose own assignment changed.
+
+    Globbing is a django-redis extension, so the wildcard needs
+    ``delete_pattern`` on Redis and a full ``clear()`` on any other backend.
+    ``cache.delete()`` is literal: passing "*" to it deleted a key *named*
+    "user_locations_*" and invalidated nothing, which -- since these entries
+    are written with ``timeout=None`` -- left them stale for the life of the
+    Redis instance. The condition below used to be inverted, so the one backend
+    that can glob was the one that did not.
+    """
+    if user_id == "*":
+        if isinstance(cache, RedisCache):
+            for key in USER_LOCATION_CACHE_KEYS:
+                cache.delete_pattern(key.format("*"))
+        else:
+            cache.clear()
+        return
+
+    for key in USER_LOCATION_CACHE_KEYS:
+        cache.delete(key.format(user_id))
 
 
 @receiver(post_save, sender=core_models.InteractiveUser)
@@ -289,6 +308,19 @@ def cache_location_graph(location_id=None):
 def cache_location_if_not_cached():
     if not cache.has_key("location_types"):
         cache_location_graph()
+
+
+def all_location_ids():
+    """Every valid location id, from the same cache the graph is built into.
+
+    Lets a caller recognise a set of allowed locations that leaves nothing out,
+    which is not a restriction at all.
+    """
+    cache_location_if_not_cached()
+    location_types = cache.get("location_types") or {}
+    if not location_types:
+        return set()
+    return set().union(*location_types.values())
 
 
 def extend_allowed_locations(location_pks, strict=True, loc_types=None):
@@ -571,7 +603,9 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     CARE_TYPE_BOTH = "B"
 
 
-class HealthFacilityCatchment(models.Model):
+class HealthFacilityCatchment(core_models.RowSecurityMixin, models.Model):
+    row_scope = core_models.ParentScope("health_facility")
+
     id = models.AutoField(db_column="HFCatchmentId", primary_key=True)
     legacy_id = models.IntegerField(db_column="LegacyId", blank=True, null=True)
     health_facility = models.ForeignKey(
