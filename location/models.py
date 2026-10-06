@@ -245,6 +245,42 @@ class LocationManager(CachedManager):
             else:
                 return Q()
 
+    # How many `parent` hops lead from a village to a location of each type.
+    VILLAGE_HOPS = {"V": "", "W": "__parent", "D": "__parent__parent", "R": "__parent__parent__parent"}
+
+    def build_user_village_filter_query(self, user: core_models.InteractiveUser, prefix="location"):
+        """``Q`` for rows whose *village* is reached by ``prefix``, at the level the user is granted.
+
+        ``build_user_location_filter_query`` compares one fixed level (say the
+        district, ``location__parent__parent``) with the user's locations
+        extended to that level. That fails for a user granted *below* it: an
+        enrolment officer's locations are villages, which never extend to a
+        district, so the officer matched nothing. Here each granted location is
+        matched at its own level instead - a village against the village, a
+        district two hops up - which also keeps every ``IN`` list as short as
+        the grant itself.
+
+        TODO(UBA): the granted locations come from ``get_allowed_ids`` (user
+        districts, officer villages, or the claim administrator's facility). With
+        user business access they come from the user's accesses of a given link
+        type (ENROLMENT for families and insurees); only that lookup changes, the
+        per-level matching below stays.
+        """
+        if not isinstance(user, core_models.InteractiveUser):
+            logger.warning(f"Access without filter for user {user.id} ")
+            return Q()
+        if user.is_superuser:
+            return Q()
+        allowed = self.get_allowed_ids(user)
+        cache_location_if_not_cached()
+        location_types = cache.get("location_types") or {}
+        condition = Q((f"{prefix}__isnull", True))
+        for loc_type, hops in self.VILLAGE_HOPS.items():
+            ids = [pk for pk in allowed if pk in location_types.get(loc_type, ())]
+            if ids:
+                condition |= Q((f"{prefix}{hops}__in", ids))
+        return condition
+
     def get_location_from_ids(self, qsr, loc_type):
         if loc_type:
             return [x for x in list(qsr) if x.type == loc_type]
