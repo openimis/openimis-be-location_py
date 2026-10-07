@@ -29,7 +29,10 @@ DEFAULT_CFG = {
             "display": "Hospital",
         },
     ],
-    "health_facility_contract_dates_mandatory": False
+    "health_facility_contract_dates_mandatory": False,
+    # a location picker scoped by a UBA credential (`ubaLinkType`) also offers the
+    # ancestors of the linked locations, so the tree can be walked down to them
+    "uba_picker_include_ancestors": True,
 }
 
 
@@ -51,6 +54,7 @@ class LocationConfig(AppConfig):
     health_facility_level = []
     health_facility_contract_dates_mandatory = None
     no_location_check = None
+    uba_picker_include_ancestors = True
 
     def __load_config(self, cfg):
         for field in cfg:

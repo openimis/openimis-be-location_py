@@ -11,6 +11,38 @@ from .models import *
 from .services import LocationService
 
 
+def _uba_scope_args():
+    """
+    The arguments scoping a location query to the locations a UBA credential puts the
+    user on - an enrolment officer's pickers showing their villages only. Opt in: a query
+    without `uba_link_type` keeps the district scope, whatever credentials the user holds.
+    """
+    return {
+        "uba_link_type": graphene.String(
+            required=False,
+            description="Restrict to the locations the current user holds a link on under "
+                        "that credential (e.g. 'ENROLMENT'), 'ALL' for any location aware one. "
+                        "Ignored for a user holding no such link."),
+        "uba_include_ancestors": graphene.Boolean(
+            required=False,
+            description="With uba_link_type, also return the ancestors of the linked "
+                        "locations so the tree can be navigated down to them. Defaults to "
+                        "the location module setting uba_picker_include_ancestors (true)."),
+    }
+
+
+def _uba_scoped_location_ids(user, kwargs):
+    """The location ids the UBA arguments restrict to, None when they restrict nothing."""
+    link_type = kwargs.get("uba_link_type")
+    if not link_type or not isinstance(user._u, core_models.InteractiveUser):
+        return None
+    include_ancestors = kwargs.get("uba_include_ancestors")
+    if include_ancestors is None:
+        include_ancestors = LocationConfig.uba_picker_include_ancestors
+    return LocationManager().uba_location_ids(
+        user._u, link_type, include_ancestors=include_ancestors)
+
+
 class Query(graphene.ObjectType):
     health_facilities = OrderedDjangoFilterConnectionField(
         HealthFacilityGQLType,
@@ -20,6 +52,7 @@ class Query(graphene.ObjectType):
     locations = OrderedDjangoFilterConnectionField(
         LocationGQLType,
         orderBy=graphene.List(of_type=graphene.String),
+        **_uba_scope_args(),
     )
     locations_all = OrderedDjangoFilterConnectionField(
         LocationGQLType,
@@ -28,9 +61,11 @@ class Query(graphene.ObjectType):
     locations_str = DjangoFilterConnectionField(
         LocationGQLType,
         str=graphene.String(),
+        **_uba_scope_args(),
     )
     user_districts = graphene.List(
-        UserDistrictGQLType
+        UserDistrictGQLType,
+        **_uba_scope_args(),
     )
     officer_locations = graphene.List(LocationGQLType,
                                       officer_code=graphene.String(required=True),
@@ -87,6 +122,11 @@ class Query(graphene.ObjectType):
         # if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):
         if info.context.user.is_anonymous:
             raise PermissionDenied(_("unauthorized"))
+        uba_location_ids = _uba_scoped_location_ids(info.context.user, kwargs)
+        if uba_location_ids is not None:
+            # Location.get_queryset still applies the district scope on top of it
+            return Location.objects.filter(id__in=uba_location_ids)
+        return None
 
     def resolve_locations_all(self, info, **kwargs):
         if info.context.user.is_anonymous:
@@ -103,6 +143,9 @@ class Query(graphene.ObjectType):
         str = kwargs.get('str')
         if str is not None:
             filters += [Q(code__icontains=str) | Q(name__icontains=str)]
+        uba_location_ids = _uba_scoped_location_ids(info.context.user, kwargs)
+        if uba_location_ids is not None:
+            filters += [Q(id__in=uba_location_ids)]
 
         return queryset.filter(*filters)
 
@@ -137,7 +180,13 @@ class Query(graphene.ObjectType):
         if not isinstance(info.context.user._u, core_models.InteractiveUser):
             raise NotImplementedError(
                 'Only Interactive Users are registered for districts')
-        return [UserDistrictGQLType(d) for d in UserDistrict.get_user_districts(info.context.user._u)]
+        districts = UserDistrict.get_user_districts(info.context.user._u)
+        uba_location_ids = _uba_scoped_location_ids(info.context.user, kwargs)
+        if uba_location_ids is not None:
+            # the districts of a user are few: fetch the allowed ones once
+            allowed = set(uba_location_ids.filter(type='D').values_list('id', flat=True))
+            districts = [d for d in districts if d.location_id in allowed]
+        return [UserDistrictGQLType(d) for d in districts]
 
     def resolve_officer_locations(self, info, **kwargs):
         if not info.context.user.has_perms(LocationConfig.gql_query_locations_perms):

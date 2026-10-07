@@ -120,21 +120,28 @@ class LocationManager(models.Manager):
         return self.get_location_from_ids((children), loc_type) if loc_type else children
 
 
-    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset=None, loc_types=['R', 'D', 'W', 'V']):
+    def build_user_location_filter_query(self, user: core_models.InteractiveUser, prefix='location', queryset=None, loc_types=['R', 'D', 'W', 'V'], link_types=None):
         """
         The row filter for `user` on a path pointing at a Location.
 
         Two things narrow a user: the districts they are assigned to
-        (`tblUsersDistricts`, through `allowed`) and, when they hold any, their UBA
-        credentials. They are AND'ed: a credential narrows *within* the assigned
-        districts, it never grants access outside them. A user holding no location aware
-        credential keeps the plain district filter, which is why
+        (`tblUsersDistricts`, through `allowed`) and the UBA credentials the caller asks
+        for. They are AND'ed: a credential narrows *within* the assigned districts, it
+        never grants access outside them. A user holding no link under the demanded
+        credentials keeps the plain district filter, which is why
         `build_uba_location_filter_query` answers None rather than an empty filter.
 
-        Every caller gets this for free, so a module never restates the UBA rule: the
-        path from the model it filters to the linked object is worked out from the
-        credential's registry `params`. It also means the rule reaches the REST/FHIR API,
-        which calls the same `Model.get_queryset`.
+        `link_types` is that demand, a single code or a list of them, "ALL" for every
+        location aware one. It defaults to None, i.e. *no* UBA narrowing, because only
+        the module owning the rows knows which credential governs them, and a credential
+        must not narrow a scope it says nothing about: a user holding a CLAIM_ADMIN link
+        on one facility still enrols wherever their districts allow, the insuree module
+        asking for ENROLMENT only.
+
+        What a module does *not* have to restate is the path: from the location path it
+        already passes, the filter works out where the linked object sits, reading the
+        credential's registry `params`. Naming the credential once per `get_queryset` also
+        makes the rule reach the REST/FHIR API, which goes through the same method.
         """
         q_allowed_location = None
         if not isinstance(user, core_models.InteractiveUser):
@@ -145,7 +152,8 @@ class LocationManager(models.Manager):
                 return Q()
         elif not user.is_imis_admin:
             q_allowed_location = Q((f"{prefix}__in", self.allowed(user.id, loc_types))) | Q((f"{prefix}__isnull", True))
-            q_uba = self.build_uba_location_filter_query(user, prefix=prefix, loc_types=loc_types)
+            q_uba = self.build_uba_location_filter_query(
+                user, prefix=prefix, loc_types=loc_types, link_types=link_types)
             if q_uba is not None:
                 q_allowed_location &= q_uba
 
@@ -161,23 +169,29 @@ class LocationManager(models.Manager):
 
     # --- UBA aware narrowing ---------------------------------------------------- #
 
-    def build_uba_location_filter_query(self, user, prefix='location', loc_types=('R', 'D', 'W', 'V')):
+    def build_uba_location_filter_query(self, user, prefix='location', loc_types=('R', 'D', 'W', 'V'),
+                                        link_types=None):
         """
         The narrowing the UBA credentials of `user` imply on `prefix`.
 
-        One term per location aware credential they actually hold a link on, OR'ed
-        together: holding an ENROLMENT link on a village and a CLAIM_ADMIN link on a
-        health facility widens what they see rather than intersecting it.
+        One term per considered credential they actually hold a link on, OR'ed together:
+        holding an ENROLMENT link on a village and a CLAIM_ADMIN link on a health facility
+        widens what they see rather than intersecting it.
 
-        None when they hold no such link, so that the caller keeps its district filter
-        instead of AND'ing with something that matches nothing.
+        `link_types` says which credentials are considered, a single code or a list of
+        them; `ALL_UBA_LINK_TYPES` ("ALL", also honoured inside a list) takes every
+        location aware one. None, the default, considers none and so narrows nothing: a
+        module opts in by naming the credentials its own rows answer to.
+
+        None when they hold no considered link, so that the caller keeps its district
+        filter instead of AND'ing with something that matches nothing.
         """
         from core.uba_filters import business_access_object_ids
         from core.uba_link_types import get_location_aware_uba_link_types
 
         prefix_type = self._prefix_location_type(loc_types)
         q_uba = None
-        for link_type in get_location_aware_uba_link_types():
+        for link_type in get_location_aware_uba_link_types(link_types):
             model_label = link_type.models[0] if link_type.models else None
             object_ids = business_access_object_ids(user, link_type.code, model_label)
             if not object_ids:
@@ -267,52 +281,92 @@ class LocationManager(models.Manager):
         return '__'.join(parts[:-delta])
 
     @staticmethod
-    def _expand_location_ids(location_ids, descendants=False, ancestors=False):
+    def _parent_paths():
         """
-        Widen a set of location ids down and/or up the tree, for the `include_descendants`
-        and `include_ancestors` params: a credential granted on a district can then reach
-        its villages. Walks level by level, the tree being as deep as `location_types`.
+        'parent', 'parent__parent', ... one per level of the configured tree below its top,
+        so that a fixed number of joins replaces walking the tree level by level.
         """
-        ids = {int(object_id) for object_id in location_ids}
+        configured = list(LocationConfig.location_types) or ['R', 'D', 'W', 'V']
+        return ['__'.join(['parent'] * depth) for depth in range(1, len(configured))]
+
+    @classmethod
+    def _expand_location_ids(cls, location_ids, descendants=False, ancestors=False):
+        """
+        Widen location ids down and/or up the tree, for the `include_descendants` and
+        `include_ancestors` params: a credential granted on a district can then reach its
+        villages.
+
+        `location_ids` is a list of ids or a queryset of them. Returns a lazy queryset of
+        location ids, used as a subquery: a district widened to its villages never travels
+        as a list of thousands of parameters.
+        """
+        if not isinstance(location_ids, models.QuerySet):
+            location_ids = [int(object_id) for object_id in location_ids]
+        paths = cls._parent_paths()
+        q_ids = Q(id__in=location_ids)
         if descendants:
-            frontier = set(ids)
-            while frontier:
-                frontier = set(Location.objects.filter(
-                    parent_id__in=frontier, *filter_validity()
-                ).values_list('id', flat=True)) - ids
-                ids |= frontier
+            for path in paths:
+                q_ids |= Q(**{f"{path}__id__in": location_ids})
+        widened = Location.objects.filter(q_ids, *filter_validity()).values_list('id', flat=True)
         if ancestors:
-            frontier = set(ids)
-            while frontier:
-                frontier = set(Location.objects.filter(
-                    id__in=frontier, *filter_validity()
-                ).exclude(parent__isnull=True).values_list('parent_id', flat=True)) - ids
-                ids |= frontier
-        return ids
+            q_ids = Q(id__in=widened)
+            for path in paths:
+                q_ids |= Q(id__in=widened.values(f"{path}__id"))
+            widened = Location.objects.filter(q_ids, *filter_validity()).values_list('id', flat=True)
+        return widened
 
-    @staticmethod
-    def _locations_at_type(location_ids, loc_type):
+    @classmethod
+    def _locations_at_type(cls, location_ids, loc_type):
         """
-        The locations of `location_ids`, or their nearest ancestor, sitting at `loc_type`.
-        Used when a path stops above the level a credential is held on.
+        The locations of `location_ids`, or their ancestor, sitting at `loc_type`, as a lazy
+        queryset of ids. Used when a path stops above the level a credential is held on.
         """
-        found, seen = set(), {int(object_id) for object_id in location_ids}
-        frontier = set(seen)
-        while frontier:
-            rows = Location.objects.filter(
-                id__in=frontier, *filter_validity()
-            ).values_list('id', 'type', 'parent_id')
-            next_frontier = set()
-            for location_id, location_type, parent_id in rows:
-                if location_type == loc_type:
-                    found.add(location_id)
-                elif parent_id and parent_id not in seen:
-                    seen.add(parent_id)
-                    next_frontier.add(parent_id)
-            frontier = next_frontier
-        return found
+        locations = Location.objects.filter(id__in=location_ids)
+        q_ids = Q(id__in=locations.values_list('id', flat=True))
+        for path in cls._parent_paths():
+            q_ids |= Q(id__in=locations.values(f"{path}__id"))
+        return Location.objects.filter(q_ids, *filter_validity(), type=loc_type).values_list('id', flat=True)
 
+    def uba_location_ids(self, user, link_types, include_ancestors=True):
+        """
+        The locations a user's UBA credentials put them on, for a location picker.
 
+        The linked locations themselves - widened below them when the credential declares
+        `include_descendants` - plus, with `include_ancestors`, every location above them,
+        so a picker walking the tree from the region down can reach the linked village.
+        Being able to *navigate* to an ancestor does not make it assignable: the
+        mutations still check the credential on the location they write.
+
+        `link_types` names the credentials considered, as for the row filter. None when
+        the user holds no link under them, the caller then keeping its usual scope.
+        Otherwise a lazy queryset of location ids, to be used in an `id__in` subquery.
+        """
+        from core.uba_filters import business_access_object_ids
+        from core.uba_link_types import get_location_aware_uba_link_types
+
+        widened = []
+        for link_type in get_location_aware_uba_link_types(link_types):
+            model_label = link_type.models[0] if link_type.models else None
+            object_ids = business_access_object_ids(user, link_type.code, model_label)
+            if not object_ids:
+                continue
+            location_field = link_type.params.get("location_field")
+            if location_field:
+                # held on a model hanging off a location: its location is where it sits
+                from django.apps import apps
+                model = apps.get_model(model_label)
+                object_ids = model.objects.filter(id__in=object_ids).exclude(
+                    **{f"{location_field}__isnull": True}
+                ).values_list(f"{location_field}_id", flat=True)
+            widened.append(self._expand_location_ids(
+                object_ids, descendants=bool(link_type.params.get("include_descendants"))))
+        if not widened:
+            return None
+        location_ids = Location.objects.filter(
+            reduce(lambda q, ids: q | Q(id__in=ids), widened, Q())).values_list('id', flat=True)
+        if include_ancestors:
+            location_ids = self._expand_location_ids(location_ids, ancestors=True)
+        return location_ids
 
     def get_location_from_ids(self, qsr, loc_type):
         if loc_type:
@@ -365,23 +419,27 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
                 and not user.is_superuser:
             if user.is_officer:
                 from core.models import Officer
-                return Officer.objects \
+                allowed = Officer.objects \
                     .filter(code=user.username, has_login=True, validity_to__isnull=True) \
                     .get().officer_allowed_locations
             elif user.is_claim_admin:
                 from claim.models import ClaimAdmin
-                return ClaimAdmin.objects \
+                allowed = ClaimAdmin.objects \
                     .filter(code=user.username, has_login=True, validity_to__isnull=True) \
                     .get().officer_allowed_locations
             elif user.is_imis_admin:
-                return Location.objects
+                return queryset
             else:
-                return cls.objects.allowed(user.i_user_id, qs=True)
+                allowed = cls.objects.allowed(user.i_user_id, qs=True)
+            # narrow what the caller passed rather than replace it: a resolver returning a
+            # filtered queryset (graphene hands it to this method) keeps its filter
+            return queryset.filter(id__in=allowed.values('id'))
         return queryset
 
     @staticmethod
-    def build_user_location_filter_query(cls, user: core_models.InteractiveUser, queryset=None):
-        return cls.objects.build_user_location_filter_query(user, queryset=queryset)
+    def build_user_location_filter_query(cls, user: core_models.InteractiveUser, queryset=None,
+                                         link_types=None):
+        return cls.objects.build_user_location_filter_query(user, queryset=queryset, link_types=link_types)
 
     class Meta:
         managed = True
