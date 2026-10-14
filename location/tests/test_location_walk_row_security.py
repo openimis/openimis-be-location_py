@@ -11,8 +11,8 @@ from location.test_helpers import (
 
 class LocationWalkRowSecurityTests(RightsRoleGraphQLTestCase):
     """
-    Walking a foreign key into the location tree stays inside the user's own
-    branch: the locations they are assigned, their ancestors and descendants.
+    Walking up from an object the user holds reaches its location and every
+    ancestor of it; walking down stays inside the user's own branch.
     """
 
     OWN_DISTRICT = "R2D1"
@@ -38,19 +38,6 @@ class LocationWalkRowSecurityTests(RightsRoleGraphQLTestCase):
             username, ["gql_query_locations_perms"], district_codes=[self.OWN_DISTRICT]
         )
 
-    def assert_forbidden_on(self, response, field):
-        content = json.loads(response.content)
-        errors = content.get("errors") or []
-        self.assertTrue(
-            any(
-                e.get("extensions", {}).get("code") == "FORBIDDEN"
-                and field in (e.get("path") or [])
-                for e in errors
-            ),
-            msg=content,
-        )
-        return content
-
     def test_walk_up_to_own_ancestor_is_allowed(self):
         """The parent of an assigned district is above the user's own branch."""
         user = self._district_limited_user("loc_walk_up")
@@ -71,24 +58,62 @@ class LocationWalkRowSecurityTests(RightsRoleGraphQLTestCase):
         self.assertEqual([n["code"] for n in nodes], [self.OWN_DISTRICT])
         self.assertEqual(nodes[0]["parent"]["code"], self.own_district.parent.code)
 
-    def test_walk_into_foreign_location_is_denied(self):
+    def test_location_of_a_held_facility_comes_with_its_ancestors(self):
         """
         ignoreLocation hands out health facilities outside the user's districts;
-        their location must not come with them.
+        whoever may read the facility may read where it is, up to the root.
         """
         user = self._district_limited_user("loc_walk_foreign")
         headers, _token = self.bearer(user)
         query = """
             query ForeignHf($search: String!) {
                 healthFacilitiesStr(str: $search, ignoreLocation: true, first: 5) {
-                    edges { node { code location { code } } }
+                    edges { node { code location { code parent { code } } } }
                 }
             }
         """
         response = self.query(
             query, headers=headers, variables={"search": self.foreign_hf.code}
         )
-        self.assert_forbidden_on(response, "location")
+        self.assertResponseNoErrors(response)
+        content = json.loads(response.content)
+        nodes = [e["node"] for e in content["data"]["healthFacilitiesStr"]["edges"]]
+        self.assertEqual(nodes[0]["location"]["code"], self.FOREIGN_DISTRICT)
+        self.assertEqual(
+            nodes[0]["location"]["parent"]["code"], self.foreign_district.parent.code
+        )
+
+    def test_way_down_from_a_foreign_ancestor_stays_scoped(self):
+        """
+        Going up is free, so the way back down must not open the foreign branch:
+        the reverse relations of a location resolve through row-scoped querysets.
+        """
+        user = self._district_limited_user("loc_walk_down")
+        headers, _token = self.bearer(user)
+        query = """
+            query WalkDown($search: String!) {
+                healthFacilitiesStr(str: $search, ignoreLocation: true, first: 5) {
+                    edges { node { location { parent {
+                        code
+                        children { edges { node { code } } }
+                    } } } }
+                }
+            }
+        """
+        response = self.query(
+            query, headers=headers, variables={"search": self.foreign_hf.code}
+        )
+        self.assertResponseNoErrors(response)
+        content = json.loads(response.content)
+        region = content["data"]["healthFacilitiesStr"]["edges"][0]["node"][
+            "location"
+        ]["parent"]
+        children = [e["node"]["code"] for e in region["children"]["edges"]]
+        self.assertNotIn(self.FOREIGN_DISTRICT, children)
+        self.assertFalse(
+            [code for code in children if code.startswith(region["code"])],
+            msg=children,
+        )
 
     def test_locations_all_still_walks_the_whole_tree(self):
         """locationsAll is the module's deliberate full-tree feed, walk included."""
