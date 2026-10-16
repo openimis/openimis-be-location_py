@@ -138,6 +138,37 @@ class LocationTest(TestCase):
         self.assertFalse(self.other_loc.id in allowed_ids)
         self.assertEqual(len(allowed_ids), 3)
 
+    def test_allowed_composes_as_a_subquery(self):
+        """It must stay a lazy queryset, not a list of ids (OP-3197).
+
+        `allowed()` used to be a recursive CTE, which MSSQL cannot host in a
+        subquery - so on that backend it executed on its own and came back as
+        a literal `IN` list of every allowed id. SQL Server caps a statement
+        at 2100 parameters, so a village-level hierarchy did not just run
+        slowly, it stopped running.
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        allowed = LocationManager().allowed(self.test_user._u.id, qs=True)
+
+        # building it, and nesting it, must touch the database zero times
+        with CaptureQueriesContext(connection) as ctx:
+            composed = Location.objects.filter(id__in=allowed.values("id"))
+            sql = str(composed.query)
+        self.assertEqual(
+            len(ctx.captured_queries), 0, "the allowed set was materialised"
+        )
+
+        # and the hierarchy must be resolved by the server, without a CTE
+        self.assertNotIn("WITH ", sql.upper())
+        self.assertIn("SELECT", sql)
+
+        self.assertEqual(
+            set(composed.values_list("id", flat=True)),
+            set(allowed.values_list("id", flat=True)),
+        )
+
     def test_is_allowed(self):
         self.assertTrue(
             LocationManager().is_allowed(

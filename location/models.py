@@ -3,16 +3,15 @@ from django_redis.cache import RedisCache
 import uuid
 from core.models import CachedManager
 from django.conf import settings
-from django.db import models, connection
+from django.db import models
 from django.dispatch import receiver
 from django.db.models.signals import post_save, post_delete
 
-from django.db.models.expressions import RawSQL
 from core import models as core_models
 from graphql import ResolveInfo
 from .apps import LocationConfig
 import logging
-from django.db.models import Q
+from django.db.models import Count, F, Q
 
 logger = logging.getLogger(__file__)
 cache = caches["location"]
@@ -90,89 +89,69 @@ class LocationManager(CachedManager):
         return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
     def allowed(self, user_id, loc_types=["R", "D", "W", "V"], strict=True, qs=False):
-        recursive_keyword = "" if settings.MSSQL else "RECURSIVE"
-        loc_type_list = "','".join(loc_types)
+        """The locations ``user_id`` may see, as a queryset.
 
-        # Clause for strict mode: include parent only if all children are assigned
-        if strict:
-            parent_filter = """
-                SELECT parent."LocationId",
-                       parent."LocationType",
-                       parent."ParentLocationId"
-                FROM "tblLocations" parent
-                WHERE parent."LocationId" IN (
-                    SELECT "ParentLocationId" FROM USER_LOC
-                )
-                AND (
-                    SELECT COUNT(*) FROM USER_LOC ul
-                    WHERE ul."ParentLocationId" = parent."LocationId"
-                ) = (
-                    SELECT COUNT(*) FROM "tblLocations" l
-                    WHERE l."ParentLocationId" = parent."LocationId"
-                    AND l."ValidityTo" IS NULL
-                )
-            """
-        else:
-            # Include direct parents unconditionally (but don't recurse from them)
-            parent_filter = """
-                SELECT parent."LocationId",
-                       parent."LocationType",
-                       parent."ParentLocationId"
-                FROM "tblLocations" parent
-                WHERE parent."LocationId" IN (
-                    SELECT "ParentLocationId" FROM USER_LOC
-                )
-            """
+        The assigned districts, everything beneath them, and their direct
+        parents. ``strict`` decides which parents count: ``False`` takes every
+        direct parent, ``True`` only a parent whose valid children are *all*
+        assigned.
 
-        query = f"""
-            WITH {recursive_keyword}
-            USER_LOC AS (
-                SELECT l."LocationId", l."ParentLocationId"
-                FROM "tblUsersDistricts" ud
-                JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"
-                WHERE ud."ValidityTo" IS NULL AND "UserID" = %s
-            ),
-            PARENTS AS (
-                {parent_filter}
-            ),
-            CTE_RECURSE AS (
-                -- Start recursion from assigned locations only
-                SELECT l."LocationId", l."LocationType", l."ParentLocationId"
-                FROM "tblLocations" l
-                WHERE l."LocationId" IN (SELECT "LocationId" FROM USER_LOC)
+        No recursion is needed for any of it. The hierarchy is fixed depth
+        (``LocationConfig.location_types``), so the descendants are a bounded
+        set of ``parent`` hops, and the strict rule is an aggregate over one
+        level of children.
 
-                UNION ALL
+        This replaces a recursive CTE that MSSQL could not host in a subquery,
+        which is why that backend used to execute it on its own and send every
+        allowed id back as a literal ``IN`` list - a list that grows with the
+        hierarchy, against a server that caps a statement at 2100 parameters
+        (OP-3197). Both backends now get the same composable queryset.
 
-                SELECT child."LocationId", child."LocationType", child."ParentLocationId"
-                FROM "tblLocations" child
-                JOIN CTE_RECURSE parent ON child."ParentLocationId" = parent."LocationId"
-                WHERE child."ValidityTo" IS NULL
-            ),
-            ALL_LOCATIONS AS (
-                SELECT * FROM CTE_RECURSE
-                UNION
-                SELECT * FROM PARENTS
-            )
-            SELECT DISTINCT "LocationId"
-            FROM ALL_LOCATIONS
-            WHERE "LocationType" IN ('{loc_type_list}')
+        ``qs`` is accepted for compatibility and ignored: it used to pick
+        between a queryset and ``Location.objects.raw()``, and every caller
+        works with a queryset.
         """
+        granted = UserDistrict.objects.filter(
+            user_id=user_id, *UserDistrict.filter_validity()
+        ).values("location_id")
 
-        if qs is not None:
-            if settings.MSSQL:  # MSSQL don't support WITH in subqueries
+        # The assigned locations themselves.
+        condition = Q(id__in=granted)
 
-                with connection.cursor() as cursor:
-                    cursor.execute(query, (user_id,))
-                    ids = cursor.fetchall()
-                    location_allowed = Location.objects.filter(id__in=[x for x, in ids])
-            else:
-                location_allowed = Location.objects.filter(
-                    id__in=RawSQL(query, (user_id,))
+        # Everything beneath them, one `parent` hop per level. Only valid rows
+        # descend, which is what the recursion did; the assigned locations and
+        # their parents were never validity-checked, so they still are not.
+        hops = "parent"
+        for _ in range(len(LocationConfig.location_types) - 1):
+            condition |= Q(**{f"{hops}_id__in": granted}) & Q(
+                validity_to__isnull=True
+            )
+            hops += "__parent"
+
+        # Their direct parents - no recursion upward, as before.
+        parents = Location.objects.filter(id__in=granted)
+        if strict:
+            parents = parents.values("parent_id")
+            parents = (
+                Location.objects.filter(id__in=parents)
+                .annotate(
+                    _granted_children=Count(
+                        "children", filter=Q(children__id__in=granted), distinct=True
+                    ),
+                    _valid_children=Count(
+                        "children",
+                        filter=Q(children__validity_to__isnull=True),
+                        distinct=True,
+                    ),
                 )
+                .filter(_granted_children=F("_valid_children"))
+                .values("id")
+            )
         else:
-            location_allowed = Location.objects.raw(query, (user_id,))
+            parents = parents.values("parent_id")
+        condition |= Q(id__in=parents)
 
-        return location_allowed
+        return Location.objects.filter(condition, type__in=loc_types)
 
     def children(self, location_id, loc_type=None):
         children = Location.objects.raw(
