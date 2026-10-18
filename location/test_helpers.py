@@ -88,6 +88,13 @@ def create_test_village(custom_props=None):
         },
     )
     custom_props["parent"] = test_ward
+    # The generated code has to reach the village too, not only its ancestors.
+    # Without it `create_test_location` falls back to its "TST-V" default, so
+    # every argument-less call returned the *same* village - and with it
+    # whatever officers, insurees and families earlier tests had attached to
+    # it. That is how a test could pass on a fresh database and fail on a
+    # long-lived one, or the reverse, with nothing in the test to explain it.
+    custom_props["code"] = code
     test_village = create_test_location("V", custom_props=custom_props)
 
     return test_village
