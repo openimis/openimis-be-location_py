@@ -3,18 +3,30 @@ from django_redis.cache import RedisCache
 import uuid
 from core.models import CachedManager
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.dispatch import receiver
 from django.db.models.signals import post_save, post_delete
 
 from core import models as core_models
+from core.cache_control import cache_delete, cache_get, cache_memo_forget, cache_set
 from graphql import ResolveInfo
 from .apps import LocationConfig
 import logging
 from django.db.models import Count, F, Q
 
 logger = logging.getLogger(__file__)
-cache = caches["location"]
+LOCATION_CACHE = "location"
+cache = caches[LOCATION_CACHE]
+
+
+# Reads and writes go through core.cache_control: entries expire (CACHE_OBJECT_TTL),
+# and a process-local cache is not trusted while mutations run in a worker.
+def _cache_get(key):
+    return cache_get(key, alias=LOCATION_CACHE)
+
+
+def _cache_set(key, value):
+    return cache_set(key, value, alias=LOCATION_CACHE)
 
 
 USER_LOCATION_CACHE_KEYS = ("user_locations_{}", "user_districts_{}")
@@ -36,6 +48,7 @@ def free_cache_for_user(user_id="*"):
     that can glob was the one that did not.
     """
     if user_id == "*":
+        cache_memo_forget([key.format("") for key in USER_LOCATION_CACHE_KEYS], alias=LOCATION_CACHE)
         if isinstance(cache, RedisCache):
             for key in USER_LOCATION_CACHE_KEYS:
                 cache.delete_pattern(key.format("*"))
@@ -43,14 +56,26 @@ def free_cache_for_user(user_id="*"):
             cache.clear()
         return
 
+    cache_memo_forget([key.format(user_id) for key in USER_LOCATION_CACHE_KEYS], alias=LOCATION_CACHE)
     for key in USER_LOCATION_CACHE_KEYS:
         cache.delete(key.format(user_id))
+
+
+def free_cache_for_user_now_and_on_commit(user_id="*"):
+    """``free_cache_for_user``, once now and once more when the write commits.
+
+    The signals that call this run inside the writer's transaction. A request
+    reading committed data in between rebuilds an entry without the change;
+    dropping the entries again once the change is visible clears that copy.
+    """
+    free_cache_for_user(user_id)
+    transaction.on_commit(lambda: free_cache_for_user(user_id))
 
 
 @receiver(post_save, sender=core_models.InteractiveUser)
 @receiver(post_delete, sender=core_models.InteractiveUser)
 def free_cache_post_user_save(sender, instance, **kwargs):
-    free_cache_for_user(instance.id)
+    free_cache_for_user_now_and_on_commit(instance.id)
 
 
 class LocationManager(CachedManager):
@@ -252,7 +277,7 @@ class LocationManager(CachedManager):
             return Q()
         allowed = self.get_allowed_ids(user)
         cache_location_if_not_cached()
-        location_types = cache.get("location_types") or {}
+        location_types = _cache_get("location_types") or {}
         condition = Q((f"{prefix}__isnull", True))
         for loc_type, hops in self.VILLAGE_HOPS.items():
             ids = [pk for pk in allowed if pk in location_types.get(loc_type, ())]
@@ -269,7 +294,7 @@ class LocationManager(CachedManager):
         if hasattr(user, '_u'):
             user = user._u
         cache_name = f"user_locations_{user.id}"
-        allowed = cache.get(cache_name)
+        allowed = _cache_get(cache_name)
         if not allowed:
             # for CA
             if user.is_claim_admin and user.health_facility:
@@ -287,7 +312,7 @@ class LocationManager(CachedManager):
                 allowed = [
                     d.location_id for d in UserDistrict(user).get_user_districts(user)
                 ]
-            cache.set(cache_name, allowed, None)
+            _cache_set(cache_name, allowed)
         return allowed
 
     def is_allowed(self, user, locations_id, strict=True):
@@ -316,12 +341,12 @@ def cache_location_graph(location_id=None):
             location_types[location.type] = set()
         location_types[location.type].add(location.id)
 
-    cache.set("location_graph", graph, timeout=None)  # Cache indefinitely
-    cache.set("location_types", location_types, timeout=None)
+    _cache_set("location_graph", graph)
+    _cache_set("location_types", location_types)
 
 
 def cache_location_if_not_cached():
-    if not cache.has_key("location_types"):
+    if _cache_get("location_types") is None:
         cache_location_graph()
 
 
@@ -332,7 +357,7 @@ def all_location_ids():
     which is not a restriction at all.
     """
     cache_location_if_not_cached()
-    location_types = cache.get("location_types") or {}
+    location_types = _cache_get("location_types") or {}
     if not location_types:
         return set()
     return set().union(*location_types.values())
@@ -348,7 +373,7 @@ def extend_allowed_locations(location_pks, strict=True, loc_types=None):
             f"extend_allowed_locations is expecting a list but received {location_pks}"
         )
     cache_location_if_not_cached()
-    graph = cache.get("location_graph")
+    graph = _cache_get("location_graph")
     result_pks = set()
     to_visit = set(location_pks)
     visited = set()
@@ -372,7 +397,7 @@ def extend_allowed_locations(location_pks, strict=True, loc_types=None):
                     to_visit.add(parent)
         result_pks.update(parents)
     if result_pks and loc_types:
-        location_types = cache.get("location_types")
+        location_types = _cache_get("location_types")
         location_types_search = set()
         for t in loc_types:
             if t in location_types:
@@ -666,11 +691,11 @@ class UserDistrict(core_models.VersionedModel):
         cachestringkey = f"user_districts_{user.id}"
         if LocationConfig.no_location_check:
             cachestringkey = "user_districts_all"
-        cachedata = cache.get(cachestringkey)
+        cachedata = _cache_get(cachestringkey)
         districts = []
         if cachedata is None:
             cache_location_if_not_cached()
-            cache_location_type = cache.get("location_types")
+            cache_location_type = _cache_get("location_types")
             cachedata = []
             if user.is_superuser or LocationConfig.no_location_check:
                 for loc in cache_location_type['D']:
@@ -695,7 +720,7 @@ class UserDistrict(core_models.VersionedModel):
                 )
             for d in districts:
                 cachedata.append([d.id, d.location_id])
-            cache.set(cachestringkey, cachedata)
+            _cache_set(cachestringkey, cachedata)
         if not districts and cachedata:
             location_ids = [d[1] for d in cachedata]
             locations = {loc.id: loc for loc in Location.objects.filter(id__in=location_ids)}
@@ -746,20 +771,20 @@ class UserDistrict(core_models.VersionedModel):
 @receiver(post_save, sender=UserDistrict)
 @receiver(post_delete, sender=UserDistrict)
 def free_cache_post_user_district_save(sender, instance, **kwargs):
-    free_cache_for_user(instance.user_id)
+    free_cache_for_user_now_and_on_commit(instance.user_id)
 
 
 @receiver(post_save, sender=Location)
 def location_changed(sender, instance, **kwargs):
     update_location_cache(sender, instance, **kwargs)
-    free_cache_for_user()
+    free_cache_for_user_now_and_on_commit()
 
 
 @receiver(post_delete, sender=Location)
 def location_deleted(sender, instance, **kwargs):
-    cache.delete(f"location_{instance.id}")
+    cache_delete(f"location_{instance.id}", alias=LOCATION_CACHE)
     update_location_cache(sender, instance, location_id=instance.id, **kwargs)
-    free_cache_for_user()
+    free_cache_for_user_now_and_on_commit()
 
 
 class OfficerVillage(core_models.VersionedModel):
