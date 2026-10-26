@@ -296,8 +296,15 @@ class LocationManager(CachedManager):
         cache_name = f"user_locations_{user.id}"
         allowed = _cache_get(cache_name)
         if not allowed:
+            # A superuser is unrestricted, as in is_allowed and the row filter, even
+            # when an Officer or claim administrator shares its login name:
+            # get_user_districts gives it every district.
+            if user.is_superuser:
+                allowed = [
+                    d.location_id for d in UserDistrict(user).get_user_districts(user)
+                ]
             # for CA
-            if user.is_claim_admin and user.health_facility:
+            elif user.is_claim_admin and user.health_facility:
                 allowed = [user.health_facility.location_id]
             elif user.is_officer:
                 allowed = list(
