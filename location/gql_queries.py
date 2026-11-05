@@ -16,6 +16,26 @@ from location.models import (
     OfficerVillage,
 )
 from django.db.models import Field
+from core.gql import ScopedQuerysetMixin
+
+
+def check_location_walk(info):
+    """
+    Access to the location of an object, and to the parent of a location.
+
+    A walk like this only ever starts from an object the user already holds -
+    returned by a row-scoped root query, or by an edge that checked its own
+    access - so whoever may read an insuree, a family or a health facility may
+    read where it is, up to the root of the tree. Going up reveals nothing but
+    the names and codes of those ancestors, which locationsAll hands any
+    authenticated user anyway.
+
+    What keeps the tree closed is the way down: children, health facilities,
+    families, insurees and every other reverse relation resolve through their
+    own type's get_queryset, which is where row security belongs.
+    """
+    if not info.context.user.is_authenticated:
+        raise PermissionDenied(_("unauthorized"))
 
 
 class LocationGQLType(DjangoObjectType):
@@ -23,8 +43,7 @@ class LocationGQLType(DjangoObjectType):
     Field.register_lookup(NotEqual)
 
     def resolve_parent(self, info):
-        if not info.context.user.is_authenticated:
-            raise PermissionDenied(_("unauthorized"))
+        check_location_walk(info)
         if "location_loader" in info.context.dataloaders and self.parent_id:
             return info.context.dataloaders["location_loader"].load(self.parent_id)
         return self.parent
@@ -73,7 +92,7 @@ class HealthFacilitySubLevelGQLType(DjangoObjectType):
         model = HealthFacilitySubLevel
 
 
-class HealthFacilityCatchmentGQLType(DjangoObjectType):
+class HealthFacilityCatchmentGQLType(ScopedQuerysetMixin, DjangoObjectType):
     class Meta:
         model = HealthFacilityCatchment
 
@@ -102,10 +121,10 @@ class HealthFacilityGQLType(DjangoObjectType):
         connection_class = ExtendedConnection
 
     def resolve_location(self, info):
-        if not info.context.user.is_authenticated:
-            raise PermissionDenied(_("unauthorized"))
-        if "location_loader" in info.context.dataloaders:
+        check_location_walk(info)
+        if "location_loader" in info.context.dataloaders and self.location_id:
             return info.context.dataloaders["location_loader"].load(self.location_id)
+        return self.location
 
     def resolve_catchments(self, info):
         if not info.context.user.has_perms(

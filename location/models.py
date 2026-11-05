@@ -3,36 +3,79 @@ from django_redis.cache import RedisCache
 import uuid
 from core.models import CachedManager
 from django.conf import settings
-from django.db import models, connection
+from django.db import models, transaction
 from django.dispatch import receiver
 from django.db.models.signals import post_save, post_delete
 
-from django.db.models.expressions import RawSQL
 from core import models as core_models
+from core.cache_control import cache_delete, cache_get, cache_memo_forget, cache_set
 from graphql import ResolveInfo
 from .apps import LocationConfig
 import logging
-from django.db.models import Q
+from django.db.models import Count, F, Q
 
 logger = logging.getLogger(__file__)
-cache = caches["location"]
+LOCATION_CACHE = "location"
+cache = caches[LOCATION_CACHE]
+
+
+# Reads and writes go through core.cache_control: entries expire (CACHE_OBJECT_TTL),
+# and a process-local cache is not trusted while mutations run in a worker.
+def _cache_get(key):
+    return cache_get(key, alias=LOCATION_CACHE)
+
+
+def _cache_set(key, value):
+    return cache_set(key, value, alias=LOCATION_CACHE)
+
+
+USER_LOCATION_CACHE_KEYS = ("user_locations_{}", "user_districts_{}")
 
 
 def free_cache_for_user(user_id="*"):
-    # wildcard only supported for Redis
-    if user_id == "*" and not isinstance(cache, RedisCache):
-        cache.clear()
-    else:
-        cache_name = f"user_locations_{user_id}"
-        cache.delete(cache_name)
-        cache_name = f"user_districts_{user_id}"
-        cache.delete(cache_name)
+    """Drop the cached location and district sets for one user, or for everyone.
+
+    ``user_id="*"`` means everyone, which is what a location change needs: it
+    shifts the expanded set of every user whose branch the location falls
+    under, not only of users whose own assignment changed.
+
+    Globbing is a django-redis extension, so the wildcard needs
+    ``delete_pattern`` on Redis and a full ``clear()`` on any other backend.
+    ``cache.delete()`` is literal: passing "*" to it deleted a key *named*
+    "user_locations_*" and invalidated nothing, which -- since these entries
+    are written with ``timeout=None`` -- left them stale for the life of the
+    Redis instance. The condition below used to be inverted, so the one backend
+    that can glob was the one that did not.
+    """
+    if user_id == "*":
+        cache_memo_forget([key.format("") for key in USER_LOCATION_CACHE_KEYS], alias=LOCATION_CACHE)
+        if isinstance(cache, RedisCache):
+            for key in USER_LOCATION_CACHE_KEYS:
+                cache.delete_pattern(key.format("*"))
+        else:
+            cache.clear()
+        return
+
+    cache_memo_forget([key.format(user_id) for key in USER_LOCATION_CACHE_KEYS], alias=LOCATION_CACHE)
+    for key in USER_LOCATION_CACHE_KEYS:
+        cache.delete(key.format(user_id))
+
+
+def free_cache_for_user_now_and_on_commit(user_id="*"):
+    """``free_cache_for_user``, once now and once more when the write commits.
+
+    The signals that call this run inside the writer's transaction. A request
+    reading committed data in between rebuilds an entry without the change;
+    dropping the entries again once the change is visible clears that copy.
+    """
+    free_cache_for_user(user_id)
+    transaction.on_commit(lambda: free_cache_for_user(user_id))
 
 
 @receiver(post_save, sender=core_models.InteractiveUser)
 @receiver(post_delete, sender=core_models.InteractiveUser)
 def free_cache_post_user_save(sender, instance, **kwargs):
-    free_cache_for_user(instance.id)
+    free_cache_for_user_now_and_on_commit(instance.id)
 
 
 class LocationManager(CachedManager):
@@ -71,89 +114,69 @@ class LocationManager(CachedManager):
         return self.get_location_from_ids((parents), loc_type) if loc_type else parents
 
     def allowed(self, user_id, loc_types=["R", "D", "W", "V"], strict=True, qs=False):
-        recursive_keyword = "" if settings.MSSQL else "RECURSIVE"
-        loc_type_list = "','".join(loc_types)
+        """The locations ``user_id`` may see, as a queryset.
 
-        # Clause for strict mode: include parent only if all children are assigned
-        if strict:
-            parent_filter = """
-                SELECT parent."LocationId",
-                       parent."LocationType",
-                       parent."ParentLocationId"
-                FROM "tblLocations" parent
-                WHERE parent."LocationId" IN (
-                    SELECT "ParentLocationId" FROM USER_LOC
-                )
-                AND (
-                    SELECT COUNT(*) FROM USER_LOC ul
-                    WHERE ul."ParentLocationId" = parent."LocationId"
-                ) = (
-                    SELECT COUNT(*) FROM "tblLocations" l
-                    WHERE l."ParentLocationId" = parent."LocationId"
-                    AND l."ValidityTo" IS NULL
-                )
-            """
-        else:
-            # Include direct parents unconditionally (but don't recurse from them)
-            parent_filter = """
-                SELECT parent."LocationId",
-                       parent."LocationType",
-                       parent."ParentLocationId"
-                FROM "tblLocations" parent
-                WHERE parent."LocationId" IN (
-                    SELECT "ParentLocationId" FROM USER_LOC
-                )
-            """
+        The assigned districts, everything beneath them, and their direct
+        parents. ``strict`` decides which parents count: ``False`` takes every
+        direct parent, ``True`` only a parent whose valid children are *all*
+        assigned.
 
-        query = f"""
-            WITH {recursive_keyword}
-            USER_LOC AS (
-                SELECT l."LocationId", l."ParentLocationId"
-                FROM "tblUsersDistricts" ud
-                JOIN "tblLocations" l ON ud."LocationId" = l."LocationId"
-                WHERE ud."ValidityTo" IS NULL AND "UserID" = %s
-            ),
-            PARENTS AS (
-                {parent_filter}
-            ),
-            CTE_RECURSE AS (
-                -- Start recursion from assigned locations only
-                SELECT l."LocationId", l."LocationType", l."ParentLocationId"
-                FROM "tblLocations" l
-                WHERE l."LocationId" IN (SELECT "LocationId" FROM USER_LOC)
+        No recursion is needed for any of it. The hierarchy is fixed depth
+        (``LocationConfig.location_types``), so the descendants are a bounded
+        set of ``parent`` hops, and the strict rule is an aggregate over one
+        level of children.
 
-                UNION ALL
+        This replaces a recursive CTE that MSSQL could not host in a subquery,
+        which is why that backend used to execute it on its own and send every
+        allowed id back as a literal ``IN`` list - a list that grows with the
+        hierarchy, against a server that caps a statement at 2100 parameters
+        (OP-3197). Both backends now get the same composable queryset.
 
-                SELECT child."LocationId", child."LocationType", child."ParentLocationId"
-                FROM "tblLocations" child
-                JOIN CTE_RECURSE parent ON child."ParentLocationId" = parent."LocationId"
-                WHERE child."ValidityTo" IS NULL
-            ),
-            ALL_LOCATIONS AS (
-                SELECT * FROM CTE_RECURSE
-                UNION
-                SELECT * FROM PARENTS
-            )
-            SELECT DISTINCT "LocationId"
-            FROM ALL_LOCATIONS
-            WHERE "LocationType" IN ('{loc_type_list}')
+        ``qs`` is accepted for compatibility and ignored: it used to pick
+        between a queryset and ``Location.objects.raw()``, and every caller
+        works with a queryset.
         """
+        granted = UserDistrict.objects.filter(
+            user_id=user_id, *UserDistrict.filter_validity()
+        ).values("location_id")
 
-        if qs is not None:
-            if settings.MSSQL:  # MSSQL don't support WITH in subqueries
+        # The assigned locations themselves.
+        condition = Q(id__in=granted)
 
-                with connection.cursor() as cursor:
-                    cursor.execute(query, (user_id,))
-                    ids = cursor.fetchall()
-                    location_allowed = Location.objects.filter(id__in=[x for x, in ids])
-            else:
-                location_allowed = Location.objects.filter(
-                    id__in=RawSQL(query, (user_id,))
+        # Everything beneath them, one `parent` hop per level. Only valid rows
+        # descend, which is what the recursion did; the assigned locations and
+        # their parents were never validity-checked, so they still are not.
+        hops = "parent"
+        for _ in range(len(LocationConfig.location_types) - 1):
+            condition |= Q(**{f"{hops}_id__in": granted}) & Q(
+                validity_to__isnull=True
+            )
+            hops += "__parent"
+
+        # Their direct parents - no recursion upward, as before.
+        parents = Location.objects.filter(id__in=granted)
+        if strict:
+            parents = parents.values("parent_id")
+            parents = (
+                Location.objects.filter(id__in=parents)
+                .annotate(
+                    _granted_children=Count(
+                        "children", filter=Q(children__id__in=granted), distinct=True
+                    ),
+                    _valid_children=Count(
+                        "children",
+                        filter=Q(children__validity_to__isnull=True),
+                        distinct=True,
+                    ),
                 )
+                .filter(_granted_children=F("_valid_children"))
+                .values("id")
+            )
         else:
-            location_allowed = Location.objects.raw(query, (user_id,))
+            parents = parents.values("parent_id")
+        condition |= Q(id__in=parents)
 
-        return location_allowed
+        return Location.objects.filter(condition, type__in=loc_types)
 
     def children(self, location_id, loc_type=None):
         children = Location.objects.raw(
@@ -226,6 +249,42 @@ class LocationManager(CachedManager):
             else:
                 return Q()
 
+    # How many `parent` hops lead from a village to a location of each type.
+    VILLAGE_HOPS = {"V": "", "W": "__parent", "D": "__parent__parent", "R": "__parent__parent__parent"}
+
+    def build_user_village_filter_query(self, user: core_models.InteractiveUser, prefix="location"):
+        """``Q`` for rows whose *village* is reached by ``prefix``, at the level the user is granted.
+
+        ``build_user_location_filter_query`` compares one fixed level (say the
+        district, ``location__parent__parent``) with the user's locations
+        extended to that level. That fails for a user granted *below* it: an
+        enrolment officer's locations are villages, which never extend to a
+        district, so the officer matched nothing. Here each granted location is
+        matched at its own level instead - a village against the village, a
+        district two hops up - which also keeps every ``IN`` list as short as
+        the grant itself.
+
+        TODO(UBA): the granted locations come from ``get_allowed_ids`` (user
+        districts, officer villages, or the claim administrator's facility). With
+        user business access they come from the user's accesses of a given link
+        type (ENROLMENT for families and insurees); only that lookup changes, the
+        per-level matching below stays.
+        """
+        if not isinstance(user, core_models.InteractiveUser):
+            logger.warning(f"Access without filter for user {user.id} ")
+            return Q()
+        if user.is_superuser:
+            return Q()
+        allowed = self.get_allowed_ids(user)
+        cache_location_if_not_cached()
+        location_types = _cache_get("location_types") or {}
+        condition = Q((f"{prefix}__isnull", True))
+        for loc_type, hops in self.VILLAGE_HOPS.items():
+            ids = [pk for pk in allowed if pk in location_types.get(loc_type, ())]
+            if ids:
+                condition |= Q((f"{prefix}{hops}__in", ids))
+        return condition
+
     def get_location_from_ids(self, qsr, loc_type):
         if loc_type:
             return [x for x in list(qsr) if x.type == loc_type]
@@ -235,10 +294,17 @@ class LocationManager(CachedManager):
         if hasattr(user, '_u'):
             user = user._u
         cache_name = f"user_locations_{user.id}"
-        allowed = cache.get(cache_name)
+        allowed = _cache_get(cache_name)
         if not allowed:
+            # A superuser is unrestricted, as in is_allowed and the row filter, even
+            # when an Officer or claim administrator shares its login name:
+            # get_user_districts gives it every district.
+            if user.is_superuser:
+                allowed = [
+                    d.location_id for d in UserDistrict(user).get_user_districts(user)
+                ]
             # for CA
-            if user.is_claim_admin and user.health_facility:
+            elif user.is_claim_admin and user.health_facility:
                 allowed = [user.health_facility.location_id]
             elif user.is_officer:
                 allowed = list(
@@ -253,7 +319,7 @@ class LocationManager(CachedManager):
                 allowed = [
                     d.location_id for d in UserDistrict(user).get_user_districts(user)
                 ]
-            cache.set(cache_name, allowed, None)
+            _cache_set(cache_name, allowed)
         return allowed
 
     def is_allowed(self, user, locations_id, strict=True):
@@ -282,13 +348,26 @@ def cache_location_graph(location_id=None):
             location_types[location.type] = set()
         location_types[location.type].add(location.id)
 
-    cache.set("location_graph", graph, timeout=None)  # Cache indefinitely
-    cache.set("location_types", location_types, timeout=None)
+    _cache_set("location_graph", graph)
+    _cache_set("location_types", location_types)
 
 
 def cache_location_if_not_cached():
-    if not cache.has_key("location_types"):
+    if _cache_get("location_types") is None:
         cache_location_graph()
+
+
+def all_location_ids():
+    """Every valid location id, from the same cache the graph is built into.
+
+    Lets a caller recognise a set of allowed locations that leaves nothing out,
+    which is not a restriction at all.
+    """
+    cache_location_if_not_cached()
+    location_types = _cache_get("location_types") or {}
+    if not location_types:
+        return set()
+    return set().union(*location_types.values())
 
 
 def extend_allowed_locations(location_pks, strict=True, loc_types=None):
@@ -301,7 +380,7 @@ def extend_allowed_locations(location_pks, strict=True, loc_types=None):
             f"extend_allowed_locations is expecting a list but received {location_pks}"
         )
     cache_location_if_not_cached()
-    graph = cache.get("location_graph")
+    graph = _cache_get("location_graph")
     result_pks = set()
     to_visit = set(location_pks)
     visited = set()
@@ -325,7 +404,7 @@ def extend_allowed_locations(location_pks, strict=True, loc_types=None):
                     to_visit.add(parent)
         result_pks.update(parents)
     if result_pks and loc_types:
-        location_types = cache.get("location_types")
+        location_types = _cache_get("location_types")
         location_types_search = set()
         for t in loc_types:
             if t in location_types:
@@ -571,7 +650,9 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     CARE_TYPE_BOTH = "B"
 
 
-class HealthFacilityCatchment(models.Model):
+class HealthFacilityCatchment(core_models.RowSecurityMixin, models.Model):
+    row_scope = core_models.ParentScope("health_facility")
+
     id = models.AutoField(db_column="HFCatchmentId", primary_key=True)
     legacy_id = models.IntegerField(db_column="LegacyId", blank=True, null=True)
     health_facility = models.ForeignKey(
@@ -617,11 +698,11 @@ class UserDistrict(core_models.VersionedModel):
         cachestringkey = f"user_districts_{user.id}"
         if LocationConfig.no_location_check:
             cachestringkey = "user_districts_all"
-        cachedata = cache.get(cachestringkey)
+        cachedata = _cache_get(cachestringkey)
         districts = []
         if cachedata is None:
             cache_location_if_not_cached()
-            cache_location_type = cache.get("location_types")
+            cache_location_type = _cache_get("location_types")
             cachedata = []
             if user.is_superuser or LocationConfig.no_location_check:
                 for loc in cache_location_type['D']:
@@ -646,7 +727,7 @@ class UserDistrict(core_models.VersionedModel):
                 )
             for d in districts:
                 cachedata.append([d.id, d.location_id])
-            cache.set(cachestringkey, cachedata)
+            _cache_set(cachestringkey, cachedata)
         if not districts and cachedata:
             location_ids = [d[1] for d in cachedata]
             locations = {loc.id: loc for loc in Location.objects.filter(id__in=location_ids)}
@@ -697,20 +778,20 @@ class UserDistrict(core_models.VersionedModel):
 @receiver(post_save, sender=UserDistrict)
 @receiver(post_delete, sender=UserDistrict)
 def free_cache_post_user_district_save(sender, instance, **kwargs):
-    free_cache_for_user(instance.user_id)
+    free_cache_for_user_now_and_on_commit(instance.user_id)
 
 
 @receiver(post_save, sender=Location)
 def location_changed(sender, instance, **kwargs):
     update_location_cache(sender, instance, **kwargs)
-    free_cache_for_user()
+    free_cache_for_user_now_and_on_commit()
 
 
 @receiver(post_delete, sender=Location)
 def location_deleted(sender, instance, **kwargs):
-    cache.delete(f"location_{instance.id}")
+    cache_delete(f"location_{instance.id}", alias=LOCATION_CACHE)
     update_location_cache(sender, instance, location_id=instance.id, **kwargs)
-    free_cache_for_user()
+    free_cache_for_user_now_and_on_commit()
 
 
 class OfficerVillage(core_models.VersionedModel):
