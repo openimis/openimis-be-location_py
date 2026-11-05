@@ -421,6 +421,9 @@ def update_location_cache(sender, instance, location_id=None, **kwargs):
 
 
 class Location(core_models.VersionedModel, core_models.ExtendableModel):
+    # Versions carry a business meaning: a validity date picks the one valid then.
+    business_versioned = True
+
     objects = LocationManager()
 
     id = models.AutoField(db_column="LocationId", primary_key=True)
@@ -460,13 +463,13 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
         return self.code + " " + self.name
 
     @classmethod
-    def get_queryset(cls, queryset, user):
-        queryset = cls.filter_queryset(queryset)
+    def get_queryset(cls, queryset, user, *, validity=None, audits=None):
+        queryset = cls.apply_row_filters(queryset, validity, audits, default=cls.filter_queryset)
         # GraphQL calls with an info object while Rest calls with the user itself
         if isinstance(user, ResolveInfo):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
-            return queryset.filter(id=-1)
+            return cls.no_rows(queryset)
 
         # OMT-280: if you create a new region and your user has district limitations, you won't find what you
         # just created. So we'll consider that if you were allowed to create it, you are also allowed to retrieve it.
@@ -541,6 +544,9 @@ class HealthFacilitySubLevel(models.Model):
 
 
 class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
+    # Versions carry a business meaning: a validity date picks the one valid then.
+    business_versioned = True
+
     class HealthFacilityStatus(models.TextChoices):
         ACTIVE = "AC"
         INACTIVE = "IN"
@@ -617,7 +623,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
         return self.code + " " + self.name
 
     @classmethod
-    def get_queryset(cls, queryset, user, **kwargs):
+    def get_queryset(cls, queryset, user, *, validity=None, audits=None, **kwargs):
         # GraphQL calls with an info object while Rest calls with the user itself
         if isinstance(user, ResolveInfo):
             user = user.context.user
@@ -628,9 +634,9 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
         ):
             queryset = HealthFacility.objects
         else:
-            queryset = cls.filter_queryset(queryset)
+            queryset = cls.apply_row_filters(queryset, validity, audits, default=cls.filter_queryset)
         if settings.ROW_SECURITY and user.is_anonymous:
-            return queryset.filter(id=-1)
+            return cls.no_rows(queryset)
         if settings.ROW_SECURITY and not user._u.is_superuser:
             return LocationManager().build_user_location_filter_query(
                 user._u, queryset=queryset, loc_types=["D"]
@@ -765,11 +771,12 @@ class UserDistrict(core_models.VersionedModel):
         )
 
     @classmethod
-    def get_queryset(cls, queryset, user):
+    def get_queryset(cls, queryset, user, *, validity=None, audits=None):
+        queryset = cls.apply_row_filters(queryset, validity, audits)
         if isinstance(user, ResolveInfo):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
-            return queryset.filter(id=-1)
+            return cls.no_rows(queryset)
         if settings.ROW_SECURITY:
             pass
         return queryset
@@ -815,11 +822,12 @@ class OfficerVillage(core_models.VersionedModel):
         db_table = "tblOfficerVillages"
 
     @classmethod
-    def get_queryset(cls, queryset, user):
+    def get_queryset(cls, queryset, user, *, validity=None, audits=None):
+        queryset = cls.apply_row_filters(queryset, validity, audits)
         if isinstance(user, ResolveInfo):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
-            return queryset.filter(id=-1)
+            return cls.no_rows(queryset)
         if settings.ROW_SECURITY:
             pass
         return queryset
