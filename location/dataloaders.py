@@ -1,5 +1,4 @@
-from promise.dataloader import DataLoader
-from promise import Promise
+from core.dataloaders import DataLoader
 
 from .models import Location, HealthFacility
 
@@ -9,7 +8,7 @@ class LocationLoader(DataLoader):
         locations = {
             location.id: location for location in Location.objects.filter(id__in=keys)
         }
-        return Promise.resolve([locations.get(location_id) for location_id in keys])
+        return [locations.get(location_id) for location_id in keys]
 
 
 class HealthFacilityLoader(DataLoader):
@@ -18,4 +17,4 @@ class HealthFacilityLoader(DataLoader):
             facility.id: facility
             for facility in HealthFacility.objects.filter(id__in=keys)
         }
-        return Promise.resolve([facilities.get(facility_id) for facility_id in keys])
+        return [facilities.get(facility_id) for facility_id in keys]

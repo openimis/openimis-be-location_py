@@ -9,7 +9,7 @@ from django.db.models.signals import post_save, post_delete
 
 from core import models as core_models
 from core.cache_control import cache_delete, cache_get, cache_memo_forget, cache_set
-from graphql import ResolveInfo
+from graphql import GraphQLResolveInfo
 from .apps import LocationConfig
 import logging
 from django.db.models import Count, F, Q
@@ -466,7 +466,7 @@ class Location(core_models.VersionedModel, core_models.ExtendableModel):
     def get_queryset(cls, queryset, user, *, validity=None, audits=None):
         queryset = cls.apply_row_filters(queryset, validity, audits, default=cls.filter_queryset)
         # GraphQL calls with an info object while Rest calls with the user itself
-        if isinstance(user, ResolveInfo):
+        if isinstance(user, GraphQLResolveInfo):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
             return cls.no_rows(queryset)
@@ -625,7 +625,7 @@ class HealthFacility(core_models.VersionedModel, core_models.ExtendableModel):
     @classmethod
     def get_queryset(cls, queryset, user, *, validity=None, audits=None, **kwargs):
         # GraphQL calls with an info object while Rest calls with the user itself
-        if isinstance(user, ResolveInfo):
+        if isinstance(user, GraphQLResolveInfo):
             user = user.context.user
         if (
             user.has_perms(
@@ -773,7 +773,7 @@ class UserDistrict(core_models.VersionedModel):
     @classmethod
     def get_queryset(cls, queryset, user, *, validity=None, audits=None):
         queryset = cls.apply_row_filters(queryset, validity, audits)
-        if isinstance(user, ResolveInfo):
+        if isinstance(user, GraphQLResolveInfo):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
             return cls.no_rows(queryset)
@@ -824,7 +824,7 @@ class OfficerVillage(core_models.VersionedModel):
     @classmethod
     def get_queryset(cls, queryset, user, *, validity=None, audits=None):
         queryset = cls.apply_row_filters(queryset, validity, audits)
-        if isinstance(user, ResolveInfo):
+        if isinstance(user, GraphQLResolveInfo):
             user = user.context.user
         if settings.ROW_SECURITY and user.is_anonymous:
             return cls.no_rows(queryset)

@@ -90,7 +90,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
             }
             """
             % (code,),
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -113,7 +113,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
                 }
             }
             """,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
@@ -143,7 +143,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
             """
             % (arg,),
             headers={
-                "HTTP_AUTHORIZATION": f"Bearer {token if token else self.admin_token}"
+                "Authorization": f"Bearer {token if token else self.admin_token}"
             },
         )
 
@@ -191,7 +191,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
         """Query with a valid token but not the right to perform this operation, but Location are"""
         response = self.query(
             " query { locations { edges { node { id name } } } } ",
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.noright_token}"},
+            headers={"Authorization": f"Bearer {self.noright_token}"},
         )
 
         self.assertResponseNoErrors(response)
@@ -222,7 +222,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
                 }
             }
             """,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -280,7 +280,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
         }"""
         response = self.query(
             query_str,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -310,7 +310,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
 
         response = self.query(
             query_str,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {non_admin_user_token}"},
+            headers={"Authorization": f"Bearer {non_admin_user_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -364,7 +364,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
 
         response = self.query(
             query_str,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -399,7 +399,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
               }
             }
             """,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -438,7 +438,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
             }
             """
             % self.test_location_delete.uuid,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -466,7 +466,7 @@ class LocationGQLTestCase(openIMISGraphQLTestCase):
         }
         }
             """,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
         self.assertResponseNoErrors(response)
 
@@ -536,7 +536,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
             }}
         """
         response = self.query(
-            query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_dist_token}"}
+            query, headers={"Authorization": f"Bearer {self.admin_dist_token}"}
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -580,7 +580,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         """
         response = self.query(
             query,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -638,7 +638,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
         """
         response = self.query(
             query,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -683,7 +683,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
 
         response = self.query(
             query,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -718,7 +718,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
               }
             }
             """,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
@@ -737,7 +737,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
                 }
                 }
             """,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
+            headers={"Authorization": f"Bearer {self.admin_token}"},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
@@ -766,7 +766,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
                 }
                 }
             """,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.noright_token}"},
+            headers={"Authorization": f"Bearer {self.noright_token}"},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
@@ -797,7 +797,7 @@ class HealthFacilityGQLTestCase(GraphQLTestCase):
       }
     }
             """,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.noright_token}"},
+            headers={"Authorization": f"Bearer {self.noright_token}"},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         content = json.loads(response.content)
